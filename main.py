@@ -189,7 +189,7 @@ def main():
             if cameraData["position"] is None:
                 print("Missed Camera Frame.\n")
                 currGlobPos = prevGlobPos
-                _path(DESIRED_EGO_FILE)
+                W._path(DESIRED_EGO_FILE)
             else:
                 currGlobPos = list(cameraData["position"]) + [0]*3
             
@@ -235,7 +235,7 @@ def main():
         stm.disable()
         stm.close()   
         G.EgoGraph(test=fileNumber)
-        G.GlobGraph(test=fileNumber)
+        #G.GlobGraph(test=fileNumber)
 
 
 if __name__ == "__main__":
