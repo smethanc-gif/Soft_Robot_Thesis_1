@@ -30,7 +30,7 @@ fileNumber = 55
 
 # Robot Properties
 moveMode    = "PCC"                                     # "PCC"     = PCC Control
-trajectory  = 1                                         # "Rod"     = Cosserat Rod Control
+trajectory  = 0                                         # "Rod"     = Cosserat Rod Control
 PCC       = control1()                                  # "Poly"    = Polynomial Curvature Case
                                                         # "Order"   = Fractional Order Control
                                                         # "PD_test" = Test PD Stuff 
@@ -130,12 +130,17 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
         targEgoPos, targEgoVel = PD_TEST(0, PD_test_mode)
     else:
         return False
-
+    prevGlobPos = [0]*6
     for i in range(round(setupTime*Frequency)):
         initEgoPos = [ x * (i/(Frequency*setupTime)) for x in targEgoPos]
         currEgoPos = stm.get_state()
         calcGlobPos = PCC.forwardKinematics()
-        currGlobPos = list(tracker.update()["position"]) + [0]*3
+        if tracker.update()["position"] is None:
+            print("Missed Camera Frame.\n")
+            currGlobPos = prevGlobPos
+        else:
+            currGlobPos = list(tracker.update()["position"]) + [0]*3
+        prevGlobPos = currGlobPos
         t_now = setupTime*(i/(Frequency*setupTime) - 1)
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
         stm.set_targets(initEgoPos, targEgoVel)
