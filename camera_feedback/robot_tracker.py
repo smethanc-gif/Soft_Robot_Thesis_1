@@ -29,8 +29,8 @@ import pyrealsense2 as rs
 #HSV_LOWER = np.array([0, 126, 131])
 #HSV_UPPER = np.array([10, 229, 255])
     ## Florescent Green w D455F
-HSV_LOWER = np.array([23, 105, 186])
-HSV_UPPER = np.array([120, 222, 255])
+HSV_LOWER = np.array([17, 153, 129])
+HSV_UPPER = np.array([28, 245, 255])
 # --- Mask cleanup ---
 # Open removes small specks, close fills small holes in the blob.
 OPEN_KERNEL = 0
@@ -231,7 +231,7 @@ class TipTracker:
         if valid.size == 0:
             return None
         depth = float((np.median(valid)) * self.depth_scale * 1000)
-        print(f"Tip depth from camera: {depth}mm\n")
+        #print(f"Tip depth from camera: {depth}mm\n")
         return depth
 
     # ---------------- 3D position ----------------

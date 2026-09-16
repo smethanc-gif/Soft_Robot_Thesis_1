@@ -26,6 +26,7 @@ CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
 Frequency = 30 # Hz
 Period = 1/Frequency
 
+fileNumber = 55
 
 # Robot Properties
 moveMode    = "PCC"                                     # "PCC"     = PCC Control
@@ -36,7 +37,7 @@ PCC       = control1()                                  # "Poly"    = Polynomial
 PD_test_mode = "sine"           # ramp or sine
 
 # Movement Timing
-setupTime   = 1
+setupTime   = 2
 
 packupTime  = 1
 if trajectory == 3:
@@ -107,7 +108,7 @@ def PD_TEST(t_now: float, tMode)-> tuple[list[float], list[float]]:
             _targEgoPos, _targEgoVel = [A * S(t_now * f)]*6, [A*(f)*C(t_now * f)]*6
             return _targEgoPos, _targEgoVel
 
-def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm)-> bool: 
+def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> bool: 
     '''Move Motors to positions that correlate to a given trajectory at when t = 0
        Returns 0 on fail, 1 on success'''
     
@@ -129,10 +130,16 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm)-> bool:
         targEgoPos, targEgoVel = PD_TEST(0, PD_test_mode)
     else:
         return False
+
     for i in range(round(setupTime*Frequency)):
         initEgoPos = [ x * (i/(Frequency*setupTime)) for x in targEgoPos]
+        currEgoPos = stm.get_state()
+        calcGlobPos = PCC.forwardKinematics()
+        currGlobPos = list(tracker.update()["position"]) + [0]*3
+        t_now = setupTime*(i/(Frequency*setupTime) - 1)
+        W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
         stm.set_targets(initEgoPos, targEgoVel)
-        time.sleep(1/Frequency)
+        time.sleep(0.01)
     return True
 
 
@@ -155,7 +162,7 @@ def main():
 
         while not tracker.getPoseLocked():    # Camera Lock Check
             tracker.update()
-            print("Here\n")
+            #print("Here\n")
             if (time.monotonic() - trackInitTime) > 10:
                 print("Lost Reference\n")
                 return 0
@@ -166,7 +173,7 @@ def main():
             stm.set_targets([0]*6, [0]*6)
             print("Motors Enabled\n")
         
-        startStatus = CTRL_INIT(moveMode, trajectory, stm)
+        startStatus = CTRL_INIT(moveMode, trajectory, stm, tracker)
         if not startStatus:
             print("Something is wrong!\n")
             return None

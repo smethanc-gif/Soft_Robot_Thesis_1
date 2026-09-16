@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 DESIRED_FILE = "PCC/Test_46/DesiredMotorPosition.txt"#"DesiredPosition.txt"
 CURRENT_FILE = "PCC/Test_46/CurrentMotorPosition.txt"#"CurrentPosition.txt"
 
-LINE_PATTERN = re.compile(r"t=([\d.]+)s\s+\[([^\]]+)\]")
+LINE_PATTERN = re.compile(r"t=(-?[\d.]+)s\s+\[([^\]]+)\]")
 
 
 def parse_log(filename: str):
@@ -61,6 +61,7 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
         ax = axes[i]
         ax.plot(desired_times, desired_vals[i], label="Desired", linestyle="--", color="tab:blue")
         ax.plot(current_times, current_vals[i], label="Actual", color="tab:orange")
+        ax.set(ylim=[0, 6])
         ax.set_title(f"{motor_names[i]}")
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Position (rad)")
@@ -68,6 +69,7 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
         ax.grid(True)
 
     fig.suptitle("Desired vs Actual Motor Positions")
+    print(f"Graphing Motor Data... \nTest {test} for {ctrl} control.\n")
     fig.tight_layout()
     plt.show()
 
@@ -94,11 +96,12 @@ def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CU
 
     fig.suptitle("Desired vs Actual Tip Positions")
     fig.tight_layout()
+    print(f"Graphing Tip Data... \nTest {test} for {ctrl} control.\n")
     plt.show()
 def main():
-    exampleTest = 40
+    exampleTest = 57
     EgoGraph(test = exampleTest)
-    GlobGraph(test = exampleTest)
+    #GlobGraph(test = exampleTest)
 
 
 if __name__ == "__main__":
