@@ -29,8 +29,8 @@ import pyrealsense2 as rs
 #HSV_LOWER = np.array([0, 126, 131])
 #HSV_UPPER = np.array([10, 229, 255])
     ## Florescent Green w D455F
-HSV_LOWER = np.array([17, 153, 129])
-HSV_UPPER = np.array([28, 245, 255])
+HSV_LOWER = np.array([18, 102, 186])
+HSV_UPPER = np.array([179, 255, 255])
 # --- Mask cleanup ---
 # Open removes small specks, close fills small holes in the blob.
 OPEN_KERNEL = 0

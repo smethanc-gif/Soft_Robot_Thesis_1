@@ -30,7 +30,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 
 # Robot Properties
 moveMode    = "PCC"                                     # "PCC"     = PCC Control
-trajectory  = 0                                         # "Rod"     = Cosserat Rod Control
+trajectory  = 1                                         # "Rod"     = Cosserat Rod Control
 PCC       = control1()                                  # "Poly"    = Polynomial Curvature Case
                                                         # "Order"   = Fractional Order Control
                                                         # "PD_test" = Test PD Stuff 
@@ -39,7 +39,7 @@ PD_test_mode = "sine"           # ramp or sine
 # Movement Timing (s)
 setupTime   = 2
 
-timeStep = 0.11
+timeStep = 0.04
 freq = 1/timeStep
 
 packupTime  = 1
@@ -64,7 +64,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     3 - Controller Input'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
-            x   , y   , z   = 200, 20*S(const_1*t_now), 180 + 0*C(const_1*t_now) 
+            x   , y   , z   = 200, 20*S(const_1*t_now), 180 + 20*C(const_1*t_now) 
             Rx  , Ry  , Rz  = 0,  PI/2, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
@@ -114,7 +114,7 @@ def PD_TEST(t_now: float, tMode)-> tuple[list[float], list[float]]:
             _targEgoPos, _targEgoVel = [A * S(t_now * f)]*6, [A*(f)*C(t_now * f)]*6
             return _targEgoPos, _targEgoVel
 
-def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> bool: 
+def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker): 
     '''Move Motors to positions that correlate to a given trajectory at when t = 0
        Returns 0 on fail, 1 on success'''
     
@@ -124,7 +124,8 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
         
         targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(0, _trajectory)
         PCC.setTarget(targGlobPos, targGlobVel)
-        targEgoPos, targEgoVel = PCC.FullIK(targGlobPos, targGlobVel)
+        targEgoPos, _ = PCC.FullIK(targGlobPos, targGlobVel)
+        targEgoVel =[x /timeStep for x in targEgoPos]
     elif mode == "Rod":
         return False
         
@@ -138,13 +139,16 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
         return False
     prevGlobPos = [0]*6
     t_glob = time.monotonic()
+    
     for i in range(round(setupTime/timeStep)):
         t_init_start = time.monotonic() # Start RealTime Process
 
         if i < 0.9*round(setupTime/timeStep): # Linearly reach starting position within 90% of the starting time
-            initEgoPos = [ x * (i/(freq*setupTime)) for x in targEgoPos]
+            initEgoPos = [ x * (i/(0.9*freq*setupTime)) for x in targEgoPos]
+            initEgoVel =[x /setupTime for x in targEgoPos]
         else:
             initEgoPos = targEgoPos
+            initEgoVel = [0]*6
 
         # Data Collection for Logging
         currEgoPos = stm.get_state()
@@ -158,7 +162,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
 
         t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
-        stm.set_targets(initEgoPos, targEgoVel)
+        stm.set_targets(initEgoPos, initEgoVel)
 
         t_init_end = time.monotonic()
         timeTaken = t_init_end - t_init_start
@@ -167,7 +171,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
         else:
             print(f"Loop {i} of the Initialisation Process went overtime by {timeTaken-timeStep}s!")
         
-    return True
+    return t_now, True
 
 
 # Main
@@ -200,13 +204,13 @@ def main():
             stm.set_targets([0]*6, [0]*6)
             print("Motors Enabled\n")
         
-        startStatus = CTRL_INIT(moveMode, trajectory, stm, tracker)
+        t_offset, startStatus = CTRL_INIT(moveMode, trajectory, stm, tracker)
         if not startStatus:
             print("Something is wrong!\n")
             return None
         t_start = time.monotonic()
         print(f"Time to start task took {t_start - taskInitTime}")
-
+        
         ##  CONTROL LOOP START  ##
         while time.monotonic() <= (t_start + taskTime): # Task Completion code
             # TIMING
@@ -247,14 +251,14 @@ def main():
             stm.set_targets(targEgoPos, targEgoVel)
             
             ## DOCUMENT
-            fileNumber = W.writeAll(targEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
+            fileNumber = W.writeAll(targEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now +t_offset)
 
             if trajectory == 3:
                 if ctrl.y_held == 1:
                     break
 
             ## TIMING 2 
-            t_loop = time.monotonic() - t_loop_start()
+            t_loop = time.monotonic() - t_loop_start
             if t_loop <= timeStep:
                 time.sleep(timeStep-t_loop)
             else:
@@ -271,6 +275,7 @@ def main():
         stm.disable()
         stm.close()   
         G.EgoGraph(test=fileNumber)
+        EgoGraph(test = fileNumber, vel=True)
         #G.GlobGraph(test=fileNumber)
 
 

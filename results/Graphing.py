@@ -143,10 +143,10 @@ def getTimeimeStatistics(timeSteps: list[float]):
     _maxTimeStep = max(deltaTime)
 
         
-    # print(f"\n-----\nTIME STATISTICS\n-----\n\n")
-    # print(f"Total timesteps:        {_NoTimeSteps}\n")
-    # print(f"Median Step Size:     {_meanTimeSteps}s\n")
-    # print(f"Min & Max Step Size:      {_minTimeStep}s | {_maxTimeStep}s")
+    print(f"\n-----\nTIME STATISTICS\n-----\n\n")
+    print(f"Total timesteps:        {_NoTimeSteps}\n")
+    print(f"Mean Step Size:     {_meanTimeSteps}s\n")
+    print(f"Min & Max Step Size:      {_minTimeStep}s | {_maxTimeStep}s")
     return _NoTimeSteps, _meanTimeSteps, _minTimeStep, _maxTimeStep
 
 def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
@@ -188,10 +188,10 @@ def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
     
 
 def main():
-    exampleTest = 66
-    timeStatistics([60, exampleTest])
+    exampleTest = 84
+    #timeStatistics([60, exampleTest])
     #EgoGraph(test = exampleTest)
-    #EgoGraph(test = exampleTest+1)
+    EgoGraph(test = exampleTest, vel=True)
     #GlobGraph(test = exampleTest)
 
 
