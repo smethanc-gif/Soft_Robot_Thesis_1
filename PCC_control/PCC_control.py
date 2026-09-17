@@ -331,7 +331,7 @@ class ContinuumRobot:
         # Motor velocity (rad/s): finite difference of successive targets,
         # gives the STM32 PD loop a velocity reference when streaming
         now = time.monotonic()
-        if hasattr(self, "_lastEgoPos"):
+        if hasattr(self, "_lastEgoPos"): #TODO This is nonsense, clean it the fuck up
             dt = now - self._lastEgoTime
             if 0 < dt <= 0.5:                   # only when streaming targets
                 _targEgoVel = [(_targEgoPos[i] - self._lastEgoPos[i])/dt

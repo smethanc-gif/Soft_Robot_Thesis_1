@@ -23,10 +23,10 @@ DESIRED_GLOB_FILE       = "DesiredTipPosition.txt"
 CALCULATED_GLOB_FILE    = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
 
-Frequency = 30 # Hz
-Period = 1/Frequency
 
-fileNumber = 55
+
+
+fileNumber = 55 # Filler so graphing doesn't fail
 
 # Robot Properties
 moveMode    = "PCC"                                     # "PCC"     = PCC Control
@@ -36,20 +36,26 @@ PCC       = control1()                                  # "Poly"    = Polynomial
                                                         # "PD_test" = Test PD Stuff 
 PD_test_mode = "sine"           # ramp or sine
 
-# Movement Timing
+# Movement Timing (s)
 setupTime   = 2
 
+timeStep = 0.11
+freq = 1/timeStep
+
 packupTime  = 1
+
+# Command Functions Setup
 if trajectory == 3:
     ctrl = Controller()
     taskTime = 1000
 else:
     taskTime    = 10
-    movementFrequency = 2 # Amount of Repetitions of movement in the taskTime
-    const_1 = PI*2*movementFrequency/taskTime
+    movementfreq = 2 # Amount of Repetitions of movement in the taskTime
+    const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
     const_1 *= 2
+
 def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     ''' Returns the Cartesian position of the tip point for a chosen trajectory at a given time.\n
     0 - Horizontal Circle\n
@@ -131,8 +137,16 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
     else:
         return False
     prevGlobPos = [0]*6
-    for i in range(round(setupTime*Frequency)):
-        initEgoPos = [ x * (i/(Frequency*setupTime)) for x in targEgoPos]
+    t_glob = time.monotonic()
+    for i in range(round(setupTime/timeStep)):
+        t_init_start = time.monotonic() # Start RealTime Process
+
+        if i < 0.9*round(setupTime/timeStep): # Linearly reach starting position within 90% of the starting time
+            initEgoPos = [ x * (i/(freq*setupTime)) for x in targEgoPos]
+        else:
+            initEgoPos = targEgoPos
+
+        # Data Collection for Logging
         currEgoPos = stm.get_state()
         calcGlobPos = PCC.forwardKinematics()
         if tracker.update()["position"] is None:
@@ -141,10 +155,18 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
         else:
             currGlobPos = list(tracker.update()["position"]) + [0]*3
         prevGlobPos = currGlobPos
-        t_now = setupTime*(i/(Frequency*setupTime) - 1)
+
+        t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
         stm.set_targets(initEgoPos, targEgoVel)
-        time.sleep(0.01)
+
+        t_init_end = time.monotonic()
+        timeTaken = t_init_end - t_init_start
+        if timeTaken <= timeStep:
+            time.sleep(timeStep-timeTaken)
+        else:
+            print(f"Loop {i} of the Initialisation Process went overtime by {timeTaken-timeStep}s!")
+        
     return True
 
 
@@ -152,7 +174,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker)-> boo
 def main():
     
     try:
-        ##  INITIALISATION
+        ##  INITIALISATION  ##
         W.controlType = moveMode
         motors_enabled = False
         print("Waiting for camera pose lock...\n")
@@ -163,12 +185,12 @@ def main():
         
         currEgoPos = [0.0]*6
         currGlobPos = [0.0] * 6 
-        trackInitTime = time.monotonic()
+        taskInitTime = time.monotonic()
 
         while not tracker.getPoseLocked():    # Camera Lock Check
             tracker.update()
             #print("Here\n")
-            if (time.monotonic() - trackInitTime) > 10:
+            if (time.monotonic() - taskInitTime) > 10:
                 print("Lost Reference\n")
                 return 0
             
@@ -183,10 +205,14 @@ def main():
             print("Something is wrong!\n")
             return None
         t_start = time.monotonic()
-        next_wake = t_start + Period # For a real-time approximation
+        print(f"Time to start task took {t_start - taskInitTime}")
 
+        ##  CONTROL LOOP START  ##
         while time.monotonic() <= (t_start + taskTime): # Task Completion code
-            t_now = time.monotonic() - t_start
+            # TIMING
+            t_loop_start = time.monotonic()
+            t_now = t_loop_start - t_start
+
             ## FEEDBACK
             prevEgoPos = currEgoPos
             currEgoPos = stm.get_state()
@@ -194,9 +220,8 @@ def main():
                 print("Failed to Contact STM32\n")
                 currEgoPos  = prevEgoPos
             
-            
             prevGlobPos = currGlobPos
-            cameraData = tracker.update()   # Camera Update is doing time
+            cameraData = tracker.update()   
 
             if cameraData["position"] is None:
                 print("Missed Camera Frame.\n")
@@ -211,9 +236,11 @@ def main():
             if moveMode == "PCC":
                 calcGlobPos = PCC.forwardKinematics()
                 targEgoPos, targEgoVel  = PCC.FullIK(targGlobPos, targGlobVel)
+
             elif moveMode == "PD_test":
                 targEgoPos, targEgoVel = PD_TEST(t_now, PD_test_mode)
                 targGlobPos, calcGlobPos, currGlobPos = [0]*6, [0]*6, [0]*6
+
             else:
                 print("No Control Mode Given.\n")
                 break
@@ -225,24 +252,21 @@ def main():
             if trajectory == 3:
                 if ctrl.y_held == 1:
                     break
-            #sleep_time = next_wake - time.monotonic()
-            #if sleep_time > 0:
-            #    time.sleep(sleep_time)
-            #    
-            #else:
-            #    print("Went Overtime!")
-            #    next_wake = time.monotonic()
-            #next_wake += Period
-            time.sleep(0.01) ## TODO Fix Real time stuff
-            
+
+            ## TIMING 2 
+            t_loop = time.monotonic() - t_loop_start()
+            if t_loop <= timeStep:
+                time.sleep(timeStep-t_loop)
+            else:
+                print(f"Went overtime at t_now = {t_now}s!")
 
     finally:
         print("Disabling motors and cleaning up.")
         if currEgoPos is not None and motors_enabled:
             endPoint = currEgoPos
-            for t in range(round(packupTime*Frequency)):
-                stm.set_targets([pos * (1 - t/(Frequency * packupTime)) for pos in endPoint], [0] * 6)
-                time.sleep(1/Frequency)
+            for t in range(round(packupTime*freq)):
+                stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
+                time.sleep(1/freq)
         tracker.stop()
         stm.disable()
         stm.close()   

@@ -75,11 +75,24 @@ def writeCurrGlob(positions: list[float], timestamp: float):
         f.write(f"t={timestamp:.3f}s  [{vals}]\n")
 
 def writeAll(_desEgo: list[float], _currEgo: list[float], _desGlob: list[float], _calcGlob: list[float], _currGlob: list[float], _timestamp: float):
-    fileNumber = writeDesEgo(_desEgo, _timestamp)
-    writeCurrEgo(_currEgo, _timestamp)
-    writeDesGlob(_desGlob, _timestamp)
-    writeCalcGlob(_calcGlob, _timestamp)
-    writeCurrGlob(_currGlob, _timestamp)
+    working = True
+    if _desEgo is not None:
+        fileNumber = writeDesEgo(_desEgo, _timestamp)
+        working = False
+    if _currEgo is not None:
+        writeCurrEgo(_currEgo, _timestamp)
+        working = False
+    if _desGlob is not None:
+        writeDesGlob(_desGlob, _timestamp)
+        working = False
+    if _calcGlob is not None:
+        writeCalcGlob(_calcGlob, _timestamp)
+        working = False
+    if _currGlob is not None:
+        writeCurrGlob(_currGlob, _timestamp)
+        working = False
+    if not working:
+        print(f"Failed to write for timestamp {_timestamp}s.")
     return fileNumber
 
 def clear_files():

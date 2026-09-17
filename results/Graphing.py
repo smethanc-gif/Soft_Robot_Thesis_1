@@ -86,15 +86,7 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
     else:
         fig.suptitle("Desired vs Actual Motor Positions")
     print(f"Graphing Motor Data... \nTest {test} for {ctrl} control.\n")
-    deltaTime = numpy.zeros(len(desiredTimes))
-    for i in range(1,len(desiredTimes)-2):
-        deltaTime[i] = desiredTimes[i+1]-desiredTimes[i]
-    
-
-    print(f"\n-----\nTIME STATISTICS\n-----\n\n")
-    print(f"Total timesteps:        {len(deltaTime)}\n")
-    print(f"Average Time Taken:     {stat.mean(deltaTime)}s\n")
-    print(f"Standard Deviation:      {stat.stdev(deltaTime)}")
+    getTimeimeStatistics(desiredTimes)
     fig.tight_layout()
     plt.show()
 
@@ -135,9 +127,70 @@ def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CU
     fig.tight_layout()
     print(f"Graphing Tip Data... \nTest {test} for {ctrl} control.\n")
     plt.show()
+
+def getTimeimeStatistics(timeSteps: list[float]):
+    '''Returns: \nThe total timesteps, 
+                \nThe Mean step length, 
+                \nThe minimum step length, 
+                \nAnd the maximum step length of a single test.'''
+    
+    deltaTime = numpy.zeros(len(timeSteps))
+    for i in range(1,len(timeSteps)-2):
+        deltaTime[i] = timeSteps[i+1]-timeSteps[i]
+    _NoTimeSteps = len(deltaTime)
+    _meanTimeSteps = stat.mean(deltaTime)
+    _minTimeStep = min(deltaTime)
+    _maxTimeStep = max(deltaTime)
+
+        
+    # print(f"\n-----\nTIME STATISTICS\n-----\n\n")
+    # print(f"Total timesteps:        {_NoTimeSteps}\n")
+    # print(f"Median Step Size:     {_meanTimeSteps}s\n")
+    # print(f"Min & Max Step Size:      {_minTimeStep}s | {_maxTimeStep}s")
+    return _NoTimeSteps, _meanTimeSteps, _minTimeStep, _maxTimeStep
+
+def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
+    if testRange is None:
+        print("Failure to provide testRange")
+        return None
+    
+    rangeDiff = testRange[1] - testRange[0]
+    timeStepN = numpy.zeros(rangeDiff)
+    timeStepAvg = numpy.zeros(rangeDiff)
+    timeStepMin = numpy.zeros(rangeDiff)
+    timeStepMax = numpy.zeros(rangeDiff)
+    for i in range(testRange[0], testRange[1]):
+        point = i - testRange[0]
+        FILE = f"{ctrl}/Test_{i}/CurrentMotorPosition.txt" 
+        times, _ = parse_log(FILE)
+        timeStepN[point], timeStepAvg[point], timeStepMin[point], timeStepMax[point] = getTimeimeStatistics(times)
+    print(f"\n------------------------------------------------------------------"+
+          f"\n TIME STATISTICS FOR {ctrl} TESTS IN RANGE: [{testRange[0]} : {testRange[1]}]" +
+          f"\n------------------------------------------------------------------\n")
+    
+    
+    numNorm = stat.NormalDist.from_samples(timeStepN)
+    numSuccessfulTests = numNorm.cdf(300)
+    maxNorm = stat.NormalDist.from_samples(timeStepMax)
+    
+    print(f"NUMBER OF TESTS ANALYSIS:")
+    print(f"Proportion of Completed Tests: {numSuccessfulTests*100}%")
+
+
+    print(f"\nMAX NORM ANALYSIS:")
+    if testPeriods is None:
+        print(f"Suggested Time Range.\n")
+        print(f"Time for 50% Success: {maxNorm.inv_cdf(0.5)}s")
+        print(f"Time for 80% Success: {maxNorm.inv_cdf(0.8)}s")
+        print(f"Time for 90% Success: {maxNorm.inv_cdf(0.9)}s")
+        print(f"Time for 95% Success: {maxNorm.inv_cdf(0.95)}s")
+        print(f"Time for 99% Success: {maxNorm.inv_cdf(0.99)}s")
+    
+
 def main():
-    exampleTest = 65
-    EgoGraph(test = exampleTest)
+    exampleTest = 66
+    timeStatistics([60, exampleTest])
+    #EgoGraph(test = exampleTest)
     #EgoGraph(test = exampleTest+1)
     #GlobGraph(test = exampleTest)
 
