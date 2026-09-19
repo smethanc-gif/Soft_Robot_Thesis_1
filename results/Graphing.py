@@ -52,6 +52,7 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
     CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + _CURRENT_FILE
     desiredTimes, desiredPos = parse_log(DESIRED_LOCATION)
     currentTimes, currentPos = parse_log(CURRENT_LOCATION)
+    errPos = numpy.array(desiredPos) - numpy.array(currentPos)
     desiredVel = numpy.zeros((len(desiredPos[0]),6))
     currentVel = numpy.zeros((len(desiredPos[0]),6))
     fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
@@ -69,8 +70,10 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
         if vel:
             ax.plot(desiredTimes, desiredVel[:,i], label="Desired Velocity", linestyle="--", color="tab:purple")
             ax.plot(currentTimes, currentVel[:,i], label="Actual", color="tab:red")
+            
             ax.set_ylabel("Velocity (rad/s))")
         else:
+            ax.plot(desiredTimes, errPos[i], label="Position Error", linestyle=":", color="tab:green")
             ax.plot(desiredTimes, desiredPos[i], label="Desired Position", linestyle="--", color="tab:blue")
             ax.plot(currentTimes, currentPos[i], label="Actual Position", color="tab:orange")
             ax.set_ylabel("Position (rad)")
