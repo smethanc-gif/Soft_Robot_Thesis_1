@@ -190,8 +190,8 @@ def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
 def main():
     exampleTest = 84
     #timeStatistics([60, exampleTest])
-    #EgoGraph(test = exampleTest)
-    EgoGraph(test = exampleTest, vel=True)
+    EgoGraph(test = exampleTest)
+    #EgoGraph(test = exampleTest, vel=True)
     #GlobGraph(test = exampleTest)
 
 

@@ -190,7 +190,7 @@ def main():
         currEgoPos = [0.0]*6
         currGlobPos = [0.0] * 6 
         taskInitTime = time.monotonic()
-
+        overflowTracker = 0
         while not tracker.getPoseLocked():    # Camera Lock Check
             tracker.update()
             #print("Here\n")
@@ -263,9 +263,11 @@ def main():
                 time.sleep(timeStep-t_loop)
             else:
                 print(f"Went overtime at t_now = {t_now}s!")
+                overflowTracker += 1
 
     finally:
         print("Disabling motors and cleaning up.")
+        print(f"Over the task, {overflowTracker} loops went overTime.")
         if currEgoPos is not None and motors_enabled:
             endPoint = currEgoPos
             for t in range(round(packupTime*freq)):
