@@ -29,8 +29,9 @@ import pyrealsense2 as rs
 #HSV_LOWER = np.array([0, 126, 131])
 #HSV_UPPER = np.array([10, 229, 255])
     ## Florescent Green w D455F
-HSV_LOWER = np.array([15, 130, 131])
-HSV_UPPER = np.array([35, 255, 255])
+HSV_LOWER = np.array([21, 130, 180])
+HSV_UPPER = np.array([90, 255, 255])
+
 # --- Mask cleanup ---
 # Open removes small specks, close fills small holes in the blob.
 OPEN_KERNEL = 0
@@ -42,7 +43,7 @@ MIN_BLOB_AREA = 0   # ignore blobs smaller than this (px) - noise rejection
 # mask flicker, so we let them settle for a moment and then freeze them.
 LOCK_COLOR_SENSOR = True
 SETTLE_FRAMES = 30        # frames of auto exposure before locking
-MANUAL_EXPOSURE = 166    # e.g. 156.0 to force a value, None = lock the settled value
+MANUAL_EXPOSURE = 156.0    # e.g. 156.0 to force a value, None = lock the settled value
 MANUAL_WHITE_BALANCE = 4600  # e.g. 4600.0, None = lock the settled value
 
 # --- ArUco marker (defines the global reference frame) ---
@@ -71,15 +72,8 @@ SMOOTHING = 0.3
 FRAME_W, FRAME_H, FPS = 640, 480, 30
 
 # Half-width of the pixel window sampled for depth around the tip centroid
-# (sampled in DEPTH-frame pixel coordinates, after mapping the tip's colour
-# pixel into depth space - see color_pixel_to_depth_pixel())
 DEPTH_WIN = 1
 #DEPTH_ERODE_PX = 2
-
-# Search range for mapping a colour pixel to a depth pixel (metres) - just
-# needs to safely bracket the camera-to-robot working distance.
-DEPTH_RANGE_MIN_M = 0.1
-DEPTH_RANGE_MAX_M = 3.0
 
 # ============================================================
 # Tracker
@@ -136,19 +130,14 @@ class TipTracker:
         config.enable_stream(rs.stream.depth, FRAME_W, FRAME_H, rs.format.z16, FPS)
         profile = self.pipeline.start(config)
 
+        # Align depth frames onto the colour frames
+        self.align = rs.align(rs.stream.color)
         self.depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
         self.color_sensor = profile.get_device().first_color_sensor()
 
-        # Colour + depth camera intrinsics (factory calibrated - no checkerboard
-        # needed), plus the cross-stream extrinsics needed to map a single
-        # colour pixel into depth-frame pixel coordinates without aligning the
-        # whole frame every call (see color_pixel_to_depth_pixel()).
-        color_stream = profile.get_stream(rs.stream.color).as_video_stream_profile()
-        depth_stream = profile.get_stream(rs.stream.depth).as_video_stream_profile()
-        self.intr = color_stream.get_intrinsics()
-        self.depth_intr = depth_stream.get_intrinsics()
-        self.color_to_depth_extrin = color_stream.get_extrinsics_to(depth_stream)
-        self.depth_to_color_extrin = depth_stream.get_extrinsics_to(color_stream)
+        # Colour camera intrinsics (factory calibrated - no checkerboard needed)
+        self.intr = (profile.get_stream(rs.stream.color)
+                     .as_video_stream_profile().get_intrinsics())
         self.camera_matrix = np.array([[self.intr.fx, 0, self.intr.ppx],
                                        [0, self.intr.fy, self.intr.ppy],
                                        [0, 0, 1]])
@@ -177,17 +166,14 @@ class TipTracker:
         print(f"locked exposure={exposure:.0f} white_balance={white_bal:.0f}")
 
     def get_frames(self):
-        # Returns (colour image, depth frame) or (None, None) if a frame dropped.
-        # No full-frame align here - depth stays in its own pixel space, and
-        # only the tip's single pixel gets mapped into it (see
-        # color_pixel_to_depth_pixel()), instead of paying to align the whole
-        # 640x480 depth frame onto the colour grid every call.
-        frames = self.pipeline.wait_for_frames()
+        # Returns (colour image, depth image) or (None, None) if a frame dropped
+        frames = self.align.process(self.pipeline.wait_for_frames())
         color_frame = frames.get_color_frame()
         depth_frame = frames.get_depth_frame()
         if not color_frame or not depth_frame:
             return None, None
-        return np.asanyarray(color_frame.get_data()), depth_frame
+        return (np.asanyarray(color_frame.get_data()),
+                np.asanyarray(depth_frame.get_data()))
 
     # ---------------- marker pose ----------------
 
@@ -238,26 +224,8 @@ class TipTracker:
         
         return mask, centroid
 
-    def color_pixel_to_depth_pixel(self, depth_frame, cx, cy):
-        '''Maps one colour-image pixel into depth-frame pixel coordinates,
-            without aligning the whole frame. Returns None on failure.'''
-        dx, dy = rs.rs2_project_color_pixel_to_depth_pixel(
-            depth_frame.get_data(), self.depth_scale,
-            DEPTH_RANGE_MIN_M, DEPTH_RANGE_MAX_M,
-            self.depth_intr, self.intr,
-            self.color_to_depth_extrin, self.depth_to_color_extrin,
-            [float(cx), float(cy)])
-        if dx < 0 or dy < 0:
-            return None
-        return int(round(dx)), int(round(dy))
-
-    def tip_depth_mm(self, depth_frame, cx, cy):
-        mapped = self.color_pixel_to_depth_pixel(depth_frame, cx, cy)
-        if mapped is None:
-            return None
-        dx, dy = mapped
-        depth_image = np.asanyarray(depth_frame.get_data())
-        window = depth_image[max(dy - DEPTH_WIN, 0):dy + DEPTH_WIN + 1, max(dx - DEPTH_WIN, 0):dx + DEPTH_WIN +1]
+    def tip_depth_mm(self, depth_image, cx, cy):
+        window = depth_image[max(cy - DEPTH_WIN, 0):cy + DEPTH_WIN + 1, max(cx - DEPTH_WIN, 0):cx + DEPTH_WIN +1]
         # Median of valid depth pixels in a small window - single pixels are noisy
 
         valid = window[window > 0]
@@ -284,7 +252,7 @@ class TipTracker:
         mask     - segmentation mask (for display)
         centroid - tip pixel (cx, cy), or None
         """
-        frame, depth_frame = self.get_frames()
+        frame, depth_image = self.get_frames()
         if frame is None:
             return {"position": None, "status": "frame dropped",
                     "frame": None, "mask": None, "centroid": None}
@@ -296,7 +264,7 @@ class TipTracker:
         status = "no tip found"
         if centroid is not None:
             cx, cy = centroid
-            d_mm = self.tip_depth_mm(depth_frame, cx, cy)
+            d_mm = self.tip_depth_mm(depth_image, cx, cy)
             if d_mm is None:
                 status = "tip found, no depth data"
             elif not self.pose_locked:
