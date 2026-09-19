@@ -7,7 +7,7 @@ from math import sin as S
 from math import cos as C
 from math import pi as PI
 from STM32_comms.pi_comm import STM32Comm
-from PCC_control.PCC_control import ContinuumRobot as control1
+from PCC_control.CTRL import ContinuumRobot
 from results import fileWriting as W
 from camera_feedback.robot_tracker import TipTracker
 from controller.ctrlInput import Controller
@@ -31,9 +31,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
 trajectory  = 0                                         # See MOVEMENT_FUNCTIONS()
-PCC       = control1()                                  
-                                         
-                                                         
+Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
 ## MOVEMENT TIMINGS ##
@@ -120,16 +118,13 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
     
 
     
-    if mode == "PCC":
-        
+    if mode in ("PCC", "Poly"):
+
         targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(0, _trajectory)
-        PCC.setTarget(targGlobPos, targGlobVel)
-        targEgoPos, _ = PCC.FullIK(targGlobPos, targGlobVel)
+        Robot.setTarget(targGlobPos, targGlobVel)
+        targEgoPos, _ = Robot.FullIK(targGlobPos, targGlobVel)
         targEgoVel =[x /timeStep for x in targEgoPos]
-    
-    elif mode == "Poly":
-        return False
-    
+
     elif mode == "PD_test":
         targEgoPos, targEgoVel = PD_TEST(0, PD_test_mode)
     else:
@@ -149,7 +144,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
 
         # Data Collection for Logging
         currEgoPos = stm.get_state()
-        calcGlobPos = PCC.forwardKinematics()
+        calcGlobPos = Robot.forwardKinematics() if Robot is not None else [0.0]*6
         if tracker.update()["position"] is None:
             print("Missed Camera Frame.\n")
             currGlobPos = prevGlobPos
@@ -234,9 +229,9 @@ def main():
             ## CONTROL
             targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(t_now, trajectory)
             
-            if moveMode == "PCC":
-                calcGlobPos = PCC.forwardKinematics()
-                targEgoPos, targEgoVel  = PCC.FullIK(targGlobPos, targGlobVel)
+            if moveMode in ("PCC", "Poly"):
+                calcGlobPos = Robot.forwardKinematics()
+                targEgoPos, targEgoVel  = Robot.FullIK(targGlobPos, targGlobVel)
 
             elif moveMode == "PD_test":
                 targEgoPos, targEgoVel = PD_TEST(t_now, PD_test_mode)

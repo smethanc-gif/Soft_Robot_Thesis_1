@@ -5,7 +5,7 @@ from math import cos as C
 from math import pi as PI
 import time
 import traj_graph
-from PCC_control import ContinuumRobot as control1
+from CTRL import ContinuumRobot as control1
 
 DESIRED_FILE = "TargetPosition.txt"
 MIDPOINT_FILE = "MidPointPosition.txt"
@@ -49,9 +49,9 @@ def main():
         robot.setTarget(thing, [0]*6)
         write_desired(target, t_now*acc)
 
-        mid = robot.midpointCalc()
+        mid = robot.midpointCalc(robot.targGlobPos)
         write_mid(mid, t_now*acc)
-        robot.PCC_Control()
+        robot.PCC_Control(robot.targGlobPos)
         calced = robot.forwardKinematics()
         write_current(calced,t_now*acc)
         if t_now >= 0.2:
