@@ -38,7 +38,7 @@ from math import cos as C
 from math import pi as PI
 
 import matplotlib.pyplot as plt
-from PCC_control import ContinuumRobot
+from CTRL import ContinuumRobot
 
 # Colour points by tool-tilt info instead of height. One of:
 #   "range" - angular spread of achievable tool axes at each position

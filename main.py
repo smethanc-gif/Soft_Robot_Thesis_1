@@ -1,22 +1,23 @@
 '''
-CONTINUUM ROBOT TESTING SCRIPT
+CONTINUUM ROBOT MAIN SCRIPT
 '''
-
+## IMPORTS ##
 import time
-
 from math import sin as S
 from math import cos as C
 from math import pi as PI
 from STM32_comms.pi_comm import STM32Comm
-from PCC_control.PCC_control import ContinuumRobot as control1
+from PCC_control.CTRL import ContinuumRobot
 from results import fileWriting as W
 from camera_feedback.robot_tracker import TipTracker
-from PCC_control.ctrlInput import Controller
+from controller.ctrlInput import Controller
 import results.Graphing as G
-# Config and Comms
+
+## COMMS ##
 PORT    = "/dev/ttyS0"
 BAUD    = 115200
 
+## DATALOGGING ##
 DESIRED_EGO_FILE        = "DesiredMotorPosition.txt"
 CURRENT_EGO_FILE        = "CurrentMotorPosition.txt"
 DESIRED_GLOB_FILE       = "DesiredTipPosition.txt"
@@ -24,27 +25,24 @@ CALCULATED_GLOB_FILE    = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
 
 
-
-
 fileNumber = 55 # Filler so graphing doesn't fail
 
-# Robot Properties
-moveMode    = "PCC"                                     # "PCC"     = PCC Control
-trajectory  = 0                                         # "Rod"     = Cosserat Rod Control
-PCC       = control1()                                  # "Poly"    = Polynomial Curvature Case
-                                                        # "Order"   = Fractional Order Control
-                                                        # "PD_test" = Test PD Stuff 
+## CTRL PROPERTIES ##
+moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
+                                                        # DISCONNECT TENDONS FOR PD_test
+trajectory  = 0                                         # See MOVEMENT_FUNCTIONS()
+Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
-# Movement Timing (s)
-setupTime   = 2
+## MOVEMENT TIMINGS ##
+setupTime   = 2 # Time expected to move into initial position
 
 timeStep = 0.04
 freq = 1/timeStep
 
-packupTime  = 1
+packupTime  = 1 # Time expected to move back to starting position
 
-# Command Functions Setup
+## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
     ctrl = Controller()
     taskTime = 1000
@@ -120,19 +118,13 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
     
 
     
-    if mode == "PCC":
-        
+    if mode in ("PCC", "Poly"):
+
         targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(0, _trajectory)
-        PCC.setTarget(targGlobPos, targGlobVel)
-        targEgoPos, _ = PCC.FullIK(targGlobPos, targGlobVel)
+        Robot.setTarget(targGlobPos, targGlobVel)
+        targEgoPos, _ = Robot.FullIK(targGlobPos, targGlobVel)
         targEgoVel =[x /timeStep for x in targEgoPos]
-    elif mode == "Rod":
-        return False
-        
-    elif mode == "Poly":
-        return False
-    elif mode == "Order":
-        return False
+
     elif mode == "PD_test":
         targEgoPos, targEgoVel = PD_TEST(0, PD_test_mode)
     else:
@@ -145,24 +137,25 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
 
         if i < 0.9*round(setupTime/timeStep): # Linearly reach starting position within 90% of the starting time
             initEgoPos = [ x * (i/(0.9*freq*setupTime)) for x in targEgoPos]
-            initEgoVel =[x /setupTime for x in targEgoPos]
+            
         else:
             initEgoPos = targEgoPos
-            initEgoVel = [0]*6
+            targEgoVel = [0]*6
 
         # Data Collection for Logging
         currEgoPos = stm.get_state()
-        calcGlobPos = PCC.forwardKinematics()
-        if tracker.update()["position"] is None:
+        calcGlobPos = Robot.forwardKinematics() if Robot is not None else [0.0]*6
+
+        cameraData = tracker.update()
+        if cameraData["position"] is None:
             print("Missed Camera Frame.\n")
             currGlobPos = prevGlobPos
         else:
-            currGlobPos = list(tracker.update()["position"]) + [0]*3
-        prevGlobPos = currGlobPos
-
+            currGlobPos = list(cameraData["position"]) + [0]*3
+            prevGlobPos = currGlobPos
         t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
-        stm.set_targets(initEgoPos, initEgoVel)
+        stm.set_targets(initEgoPos, targEgoVel)
 
         t_init_end = time.monotonic()
         timeTaken = t_init_end - t_init_start
@@ -237,9 +230,9 @@ def main():
             ## CONTROL
             targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(t_now, trajectory)
             
-            if moveMode == "PCC":
-                calcGlobPos = PCC.forwardKinematics()
-                targEgoPos, targEgoVel  = PCC.FullIK(targGlobPos, targGlobVel)
+            if moveMode in ("PCC", "Poly"):
+                calcGlobPos = Robot.forwardKinematics()
+                targEgoPos, targEgoVel  = Robot.FullIK(targGlobPos, targGlobVel)
 
             elif moveMode == "PD_test":
                 targEgoPos, targEgoVel = PD_TEST(t_now, PD_test_mode)

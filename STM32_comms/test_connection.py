@@ -23,7 +23,7 @@ import tty
 import termios
 import select
 from pi_comm import STM32Comm
-from PCC_control.PCC_control import ContinuumRobot as CR
+from PCC_control.CTRL import ContinuumRobot as CR
 
 # ------------------------------------------------------------------ #
 #  Config                                                              #

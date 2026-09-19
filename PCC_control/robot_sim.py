@@ -32,7 +32,7 @@ import math
 from math import sin as S
 from math import cos as C
 from math import pi as PI
-from PCC_control import ContinuumRobot as control1
+from CTRL import ContinuumRobot as control1
 import time
 # ---- Robot parameters (from ContinuumRobot.py) ----
 NODES = 10
