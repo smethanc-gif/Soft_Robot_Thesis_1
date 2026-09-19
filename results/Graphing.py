@@ -77,7 +77,7 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
             ax.plot(desiredTimes, desiredPos[i], label="Desired Position", linestyle="--", color="tab:blue")
             ax.plot(currentTimes, currentPos[i], label="Actual Position", color="tab:orange")
             ax.set_ylabel("Position (rad)")
-            #ax.set(ylim=, max(desiredPos[i])+1])
+            #ax.set(xlim = [0,2], ylim=[5, 5.6])
         
         ax.set_title(f"{motor_names[i]}")
         ax.set_xlabel("Time (s)")
@@ -100,16 +100,16 @@ def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CU
     currentTimes, currentPos = parse_log(CURRENT_LOCATION)
     desiredVel = numpy.zeros((len(desiredPos),6))
     currentVel = numpy.zeros((len(desiredPos),6))   
-    fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
     axes = axes.flatten()
 
-    motor_names = ["X", "Y", "Z", "Rx", "Ry", "Rz"]
-    for i in range(6):
+    axis_names = ["X", "Y", "Z"]
+    for i in range(3):
             for j in range(len(desiredPos)-1):
                 desiredVel[j+1,i] = desiredPos[j+1][(i)] - desiredPos[j][i]
                 currentVel[j+1, i] = currentPos[j+1][i] - currentPos[j][i]
 
-    for i in range(6):
+    for i in range(3):
         ax = axes[i]
         if vel:
             ax.plot(desiredTimes, desiredVel[i], label="Desired Velocity", linestyle="--", color="tab:purple")
@@ -117,7 +117,7 @@ def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CU
         else:
             ax.plot(desiredTimes, desiredPos[i], label="Desired Position", linestyle="--", color="tab:blue")
             ax.plot(currentTimes, currentPos[i], label="Actual Position", color="tab:orange")
-        ax.set_title(f"{motor_names[i]}")
+        ax.set_title(f"{axis_names[i]}")
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Position (mm)")
         ax.legend()
@@ -191,11 +191,11 @@ def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
     
 
 def main():
-    exampleTest = 83
+    exampleTest = 93
     #timeStatistics([60, exampleTest])
     #EgoGraph(test = exampleTest)
-    EgoGraph(test = exampleTest, vel=True)
-    #GlobGraph(test = exampleTest)
+    #EgoGraph(test = exampleTest, vel=True)
+    GlobGraph(test = exampleTest)
 
 
 if __name__ == "__main__":

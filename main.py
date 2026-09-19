@@ -30,7 +30,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 
 # Robot Properties
 moveMode    = "PCC"                                     # "PCC"     = PCC Control
-trajectory  = 1                                         # "Rod"     = Cosserat Rod Control
+trajectory  = 0                                         # "Rod"     = Cosserat Rod Control
 PCC       = control1()                                  # "Poly"    = Polynomial Curvature Case
                                                         # "Order"   = Fractional Order Control
                                                         # "PD_test" = Test PD Stuff 
@@ -277,7 +277,7 @@ def main():
         stm.disable()
         stm.close()   
         G.EgoGraph(test=fileNumber)
-        G.EgoGraph(test = fileNumber, vel=True)
+        #G.EgoGraph(test = fileNumber, vel=True)
         #G.GlobGraph(test=fileNumber)
 
 
