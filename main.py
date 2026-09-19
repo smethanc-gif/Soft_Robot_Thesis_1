@@ -1,9 +1,8 @@
 '''
-CONTINUUM ROBOT TESTING SCRIPT
+CONTINUUM ROBOT MAIN SCRIPT
 '''
-
+## IMPORTS ##
 import time
-
 from math import sin as S
 from math import cos as C
 from math import pi as PI
@@ -11,12 +10,14 @@ from STM32_comms.pi_comm import STM32Comm
 from PCC_control.PCC_control import ContinuumRobot as control1
 from results import fileWriting as W
 from camera_feedback.robot_tracker import TipTracker
-from PCC_control.ctrlInput import Controller
+from controller.ctrlInput import Controller
 import results.Graphing as G
-# Config and Comms
+
+## COMMS ##
 PORT    = "/dev/ttyS0"
 BAUD    = 115200
 
+## DATALOGGING ##
 DESIRED_EGO_FILE        = "DesiredMotorPosition.txt"
 CURRENT_EGO_FILE        = "CurrentMotorPosition.txt"
 DESIRED_GLOB_FILE       = "DesiredTipPosition.txt"
@@ -24,27 +25,26 @@ CALCULATED_GLOB_FILE    = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
 
 
-
-
 fileNumber = 55 # Filler so graphing doesn't fail
 
-# Robot Properties
-moveMode    = "PCC"                                     # "PCC"     = PCC Control
-trajectory  = 0                                         # "Rod"     = Cosserat Rod Control
-PCC       = control1()                                  # "Poly"    = Polynomial Curvature Case
-                                                        # "Order"   = Fractional Order Control
-                                                        # "PD_test" = Test PD Stuff 
+## CTRL PROPERTIES ##
+moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
+                                                        # DISCONNECT TENDONS FOR PD_test
+trajectory  = 0                                         # See MOVEMENT_FUNCTIONS()
+PCC       = control1()                                  
+                                         
+                                                         
 PD_test_mode = "sine"           # ramp or sine
 
-# Movement Timing (s)
-setupTime   = 2
+## MOVEMENT TIMINGS ##
+setupTime   = 2 # Time expected to move into initial position
 
 timeStep = 0.04
 freq = 1/timeStep
 
-packupTime  = 1
+packupTime  = 1 # Time expected to move back to starting position
 
-# Command Functions Setup
+## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
     ctrl = Controller()
     taskTime = 1000
@@ -126,13 +126,10 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
         PCC.setTarget(targGlobPos, targGlobVel)
         targEgoPos, _ = PCC.FullIK(targGlobPos, targGlobVel)
         targEgoVel =[x /timeStep for x in targEgoPos]
-    elif mode == "Rod":
-        return False
-        
+    
     elif mode == "Poly":
         return False
-    elif mode == "Order":
-        return False
+    
     elif mode == "PD_test":
         targEgoPos, targEgoVel = PD_TEST(0, PD_test_mode)
     else:
