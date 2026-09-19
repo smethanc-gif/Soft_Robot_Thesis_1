@@ -277,7 +277,7 @@ def main():
         stm.disable()
         stm.close()   
         G.EgoGraph(test=fileNumber)
-        G.EgoGraph(test = fileNumber, vel=True)
+        #G.EgoGraph(test = fileNumber, vel=True)
         #G.GlobGraph(test=fileNumber)
 
 
