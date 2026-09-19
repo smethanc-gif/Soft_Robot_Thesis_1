@@ -137,24 +137,25 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
 
         if i < 0.9*round(setupTime/timeStep): # Linearly reach starting position within 90% of the starting time
             initEgoPos = [ x * (i/(0.9*freq*setupTime)) for x in targEgoPos]
-            initEgoVel =[x /setupTime for x in targEgoPos]
+            
         else:
             initEgoPos = targEgoPos
-            initEgoVel = [0]*6
+            targEgoVel = [0]*6
 
         # Data Collection for Logging
         currEgoPos = stm.get_state()
         calcGlobPos = Robot.forwardKinematics() if Robot is not None else [0.0]*6
-        if tracker.update()["position"] is None:
+
+        cameraData = tracker.update()
+        if cameraData["position"] is None:
             print("Missed Camera Frame.\n")
             currGlobPos = prevGlobPos
         else:
-            currGlobPos = list(tracker.update()["position"]) + [0]*3
-        prevGlobPos = currGlobPos
-
+            currGlobPos = list(cameraData["position"]) + [0]*3
+            prevGlobPos = currGlobPos
         t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
-        stm.set_targets(initEgoPos, initEgoVel)
+        stm.set_targets(initEgoPos, targEgoVel)
 
         t_init_end = time.monotonic()
         timeTaken = t_init_end - t_init_start

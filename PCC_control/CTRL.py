@@ -7,6 +7,7 @@ the active model - see constantCurve.py for the "PCC" model.
 '''
 import numpy as np
 
+
 try:
     from . import constantCurve
 except ImportError:
