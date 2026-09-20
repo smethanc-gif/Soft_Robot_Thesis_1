@@ -231,7 +231,7 @@ class TipTracker:
         if valid.size == 0:
             return None
         depth = float((np.median(valid)) * self.depth_scale * 1000)
-        print(f"Tip depth from camera: {depth}mm\n")
+        #print(f"Tip depth from camera: {depth}mm\n")
         return depth
 
     # ---------------- 3D position ----------------

@@ -30,7 +30,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 0                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 1                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -62,7 +62,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     3 - Controller Input'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
-            x   , y   , z   = 200, 20*S(const_1*t_now), 180 + 20*C(const_1*t_now) 
+            x   , y   , z   = 200, 40*S(const_1*t_now), 180 + 0*C(const_1*t_now) 
             Rx  , Ry  , Rz  = 0,  PI/2, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
@@ -161,8 +161,8 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
         timeTaken = t_init_end - t_init_start
         if timeTaken <= timeStep:
             time.sleep(timeStep-timeTaken)
-        else:
-            print(f"Loop {i} of the Initialisation Process went overtime by {timeTaken-timeStep}s!")
+        #else:
+            #print(f"Loop {i} of the Initialisation Process went overtime by {timeTaken-timeStep}s!")
         
     return t_now, True
 
@@ -255,7 +255,7 @@ def main():
             if t_loop <= timeStep:
                 time.sleep(timeStep-t_loop)
             else:
-                print(f"Went overtime at t_now = {t_now}s!")
+                #print(f"Went overtime at t_now = {t_now}s!")
                 overflowTracker += 1
 
     finally:
