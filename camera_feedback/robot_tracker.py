@@ -29,7 +29,7 @@ import pyrealsense2 as rs
 #HSV_LOWER = np.array([0, 126, 131])
 #HSV_UPPER = np.array([10, 229, 255])
     ## Florescent Green w D455F
-HSV_LOWER = np.array([15, 130, 186])
+HSV_LOWER = np.array([15, 130, 148])
 HSV_UPPER = np.array([35, 255, 255])
 # --- Mask cleanup ---
 # Open removes small specks, close fills small holes in the blob.
@@ -42,7 +42,7 @@ MIN_BLOB_AREA = 0   # ignore blobs smaller than this (px) - noise rejection
 # mask flicker, so we let them settle for a moment and then freeze them.
 LOCK_COLOR_SENSOR = True
 SETTLE_FRAMES = 30        # frames of auto exposure before locking
-MANUAL_EXPOSURE = 156.0    # e.g. 156.0 to force a value, None = lock the settled value
+MANUAL_EXPOSURE = 166.0    # e.g. 156.0 to force a value, None = lock the settled value
 MANUAL_WHITE_BALANCE = 4600  # e.g. 4600.0, None = lock the settled value
 
 # --- ArUco marker (defines the global reference frame) ---
