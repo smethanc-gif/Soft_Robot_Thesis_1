@@ -25,9 +25,6 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3D projection)
 import time
-import os
-os.environ["SDL_VIDEODRIVER"] = "dummy"
-import pygame
 import math
 from math import sin as S
 from math import cos as C
@@ -36,14 +33,15 @@ from CTRL import ContinuumRobot as control1
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, for `import main`
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, for `import main`/`import controller`
 from main import MOVEMENT_FUNCTIONS, setupTime, taskTime, packupTime, trajectory
+from controller.ctrlInput import Controller
 
 # ---- Robot parameters (from ContinuumRobot.py) ----
 NODES = 10
 SECTIONS = 2
 ROBOT_DIAMETER = 20   # mm
-SECT_LENGTH = 143     # mm
+SECT_LENGTH = 148.5   # mm - was 143, now matches ConstantCurvature's real sectL
 CHECK = False
 Robot = control1()
 t_start = time.monotonic()
@@ -128,8 +126,15 @@ def plot_static():
     plt.show()
 
 
-def animate():
-    """Sweep section-1 bending sinusoidally, similar to MOVEMENT_FUNCTIONS()."""
+def animate(use_controller: bool = False):
+    """Sweep section-1 bending sinusoidally, similar to MOVEMENT_FUNCTIONS().
+
+        use_controller=False (default): replays main.py's MOVEMENT_FUNCTIONS
+            trajectory, cycling init -> task -> packup -> repeat.
+        use_controller=True: drives the sim live from a real Xbox controller
+            via controller.ctrlInput.Controller instead - needs a controller
+            actually plugged in (constructing Controller() opens joystick 0),
+            so this path isn't exercised by anything that runs without one."""
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection="3d")
     line, = ax.plot([], [], [], color="tab:blue", linewidth=3, marker="o", markersize=3)
@@ -139,32 +144,10 @@ def animate():
     ax.set_xlabel("X (mm)")
     ax.set_ylabel("Y (mm)")
     ax.set_zlabel("Z (mm)")
-    ax.set_title("PCC Backbone Animation")
+    ax.set_title("PCC Backbone Animation" + (" (controller input)" if use_controller else ""))
 
+    controller = Controller() if use_controller else None
 
-    def ctrlInput() -> list[float]:
-        pygame.event.pump()
-        left_thumb = [joystick.get_axis(0), joystick.get_axis(1)]
-        right_thumb = [joystick.get_axis(3), joystick.get_axis(4)]
-        l_trig = joystick.get_axis(2)
-        r_trig = joystick.get_axis(5)
-        a_held = joystick.get_button(0)
-        print(
-                f"L-stick={left_thumb}  R-stick={right_thumb}  "
-                f"L-trig={l_trig:.2f}  R-trig={r_trig:.2f}  "
-                f"buttons={a_held}",
-                end="\r",
-            )
-        target = [
-            left_thumb[0] * 0,
-            left_thumb[1] *90, 
-            SECT_LENGTH*2 *(1 - 0.2*l_trig), 
-            right_thumb[0] * math.pi/2,
-            right_thumb[1] * math.pi/2,
-            0
-        ]
-        return target
-    
     # Same phase shape as main.py's CTRL_INIT -> task loop -> finally-block
     # packup, but driven in Cartesian space (rather than ego/motor space,
     # like main.py does) since this simulator only ever talks to Robot via
@@ -187,9 +170,13 @@ def animate():
             return (taskEndPose + frac*(restPose - taskEndPose)).tolist()
 
     def update(frame):
-        t_now = time.monotonic() - t_start
-        t_cycle = t_now % cycleLength                             # loop forever until the window closes
-        target = targetForCycleTime(t_cycle)
+        if controller is not None:
+            controller.update()
+            target = controller.process().tolist()
+        else:
+            t_now = time.monotonic() - t_start
+            t_cycle = t_now % cycleLength                         # loop forever until the window closes
+            target = targetForCycleTime(t_cycle)
 
         Robot.FullIK(target, [0] * 6)
 
@@ -213,12 +200,5 @@ def animate():
 
 if __name__ == "__main__":
     # plot_static()
-    
-    #pygame.init()
-    #pygame.joystick.init()
-    #joystick = pygame.joystick.Joystick(0)
-    #joystick.init()
-    #print(joystick.get_numaxes(), joystick.get_numbuttons())
-    #print(f"Connected: controller {joystick}")
     print("Reading input...\n")
-    animate()  # uncomment to see the sinusoidal bending animation instead
+    animate(use_controller=True)  # flip to True to drive the sim live from an Xbox controller instead
