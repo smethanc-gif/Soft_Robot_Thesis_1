@@ -90,7 +90,7 @@ def EgoGraph(test: int, ctrl="PCC", __DESIRED_FILE="DesiredMotorPosition.txt", _
     else:
         fig.suptitle("Desired vs Actual Motor Positions")
     print(f"Graphing Motor Data... \nTest {test} for {ctrl} control.\n")
-    getTimeimeStatistics(desiredTimes)
+    getTimeStatistics(desiredTimes)
     fig.tight_layout()
     plt.show()
 
