@@ -10,8 +10,10 @@ import numpy as np
 
 try:
     from . import constantCurve
+    from . import poly
 except ImportError:
     import constantCurve
+    import poly
 
 
 class ContinuumRobot:
@@ -20,7 +22,7 @@ class ContinuumRobot:
         if method == "PCC":
             self.model = constantCurve.ConstantCurvature()
         elif method == "Poly":
-            raise NotImplementedError("Poly control method is not implemented yet")
+            self.model = poly.PolynomialCurvature()
         else:
             raise ValueError(f"Unknown control method: {method!r}")
 
@@ -50,13 +52,20 @@ class ContinuumRobot:
         return np.array([x - L*t[0], y - L*t[1], z - L*t[2], Rx, Ry, Rz])
 
     def FullIK(self, _targGlobPos: list[float], _targGlobVel: list[float]) -> tuple[np.ndarray, np.ndarray]:
-        ''' Runs toolTransform, setTarget, midpointCalc, and the active model's
-            cable/motor conversion.\n
+        ''' Runs toolTransform, setTarget, then the active method's own IK
+            and cable/motor conversion.\n
             returns the motor positions necessary to get to the desired Cartesian Coordinates'''
         targBendPos = self.toolTransform(_targGlobPos)
         self.setTarget(targBendPos, _targGlobVel)
-        self.model.midpointCalc(self.targGlobPos)
-        return self.model.PCC_Control(self.targGlobPos)
+        if self.method == "PCC":
+            self.model.midpointCalc(self.targGlobPos)
+            return self.model.PCC_Control(self.targGlobPos)
+        elif self.method == "Poly":
+            self.model.solveShape(self.targGlobPos)
+            return self.model.computeMotorTargets(self.targGlobPos)
 
     def forwardKinematics(self) -> np.ndarray:
-        return self.model.forwardKinematics()
+        if self.method == "PCC":
+            return self.model.forwardKinematics()
+        elif self.method == "Poly":
+            return self.model.forwardKinematics()

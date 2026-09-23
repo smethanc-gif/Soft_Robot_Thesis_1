@@ -3,9 +3,11 @@ CONTINUUM ROBOT MAIN SCRIPT
 '''
 ## IMPORTS ##
 import time
+import math
 from math import sin as S
 from math import cos as C
 from math import pi as PI
+import numpy as np
 from STM32_comms.pi_comm import STM32Comm
 from PCC_control.CTRL import ContinuumRobot
 from results import fileWriting as W
@@ -30,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 1                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 5                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -46,6 +48,8 @@ packupTime  = 1 # Time expected to move back to starting position
 if trajectory == 3:
     ctrl = Controller()
     taskTime = 1000
+elif trajectory == 5:
+    taskTime = 100
 else:
     taskTime    = 10
     movementfreq = 2 # Amount of Repetitions of movement in the taskTime
@@ -62,19 +66,19 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     3 - Controller Input'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
-            x   , y   , z   = 200, 40*S(const_1*t_now), 180 + 0*C(const_1*t_now) 
+            x   , y   , z   = 150, 70*S(const_1*t_now), 220 + 30*C(const_1*t_now)
             Rx  , Ry  , Rz  = 0,  PI/2, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
         case 1:                                         ## Vertical Spiral
-            x   , y   , z   = 50* S(const_1*t_now) *S(const_1*t_now/8), 50*C(const_1*t_now)*S(const_1*t_now/8), 300
+            x   , y   , z   = 90* S(const_1*t_now) *S(const_1*t_now/8), 90*C(const_1*t_now)*S(const_1*t_now/8), 300
             Rx  , Ry  , Rz  = 0, 0, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
             
         case 2:                                         ## Vertical Rotate
-            x, y, z = 0, 0, 250 + 40*C(const_1*t_now) 
-            Rx, Ry, Rz = PI* C(const_1*t_now) *S(const_1*t_now/8)/4, PI*S(const_1*t_now)*S(const_1*t_now/8)/4, 0
+            x, y, z = 0, 0, 275 + 20*C(const_1*t_now)
+            Rx, Ry, Rz = PI* C(const_1*t_now) *S(const_1*t_now/8)/8, PI*S(const_1*t_now)*S(const_1*t_now/8)/8, 0
             dx, dy, dz = 0, 0, 0
             dRx, dRy, dRz = 0, 0, 0
 
@@ -84,6 +88,45 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             dx= dy= dz = 0
             dRx= dRy= dRz =0
 
+        case 4: # Full Circle - centred, untilted; complements case 0's off-axis tilted loop
+            x, y, z = 120*C(const_1*t_now), 120*S(const_1*t_now), 270
+            Rx, Ry, Rz = 0, 0, 0
+            dx, dy, dz = 0, 0, 0
+            dRx, dRy, dRz = 0, 0, 0
+
+        case 5: # Butterfly curve (Temple Fay). Own timing, not const_1 - this
+                # curve needs a long, fixed sweep of theta to trace its full
+                # shape (the loops only resolve over ~24pi), unlike a circle
+                # which looks identical after any number of revolutions, so
+                # tying it to movementfreq wouldn't make sense here.
+            theta = t_now * (24*PI/taskTime)
+            rad = math.exp(C(theta)) - 2*C(4*theta) + S(theta/12)**5
+            x, y, z = 24*rad*C(theta), 24*rad*S(theta), 270
+            Rx, Ry, Rz = 0, 0, 0
+            dx, dy, dz = 0, 0, 0
+            dRx, dRy, dRz = 0, 0, 0
+
+        case 6: # linear between two points DO NOT USE
+            p1 = np.array([0,0,320,0,0,0])
+            p2 = np.array([100,100,100, PI/2, PI/2,0])
+
+            x, y, z, Rx, Ry, Rz = p1 + (t_now/taskTime)*p2
+            dx,dy,dz,dRx,dRy,dRz = [0]*6
+
+        case 7: # Figure 8
+            a = 110
+            x = a*C(const_1*t_now)/(1+(S(const_1*t_now))**2)
+            y = a*S(const_1*t_now)*C(const_1*t_now)/(1+(S(const_1*t_now)**2))
+            z = 300
+            Rx, Ry, Rz = [0]*3
+            dx,dy,dz,dRx,dRy,dRz = [0]*6
+        case 8: # 3D Helix
+            radius = 90
+            x = radius *C(const_1*t_now)
+            y = radius *S(const_1*t_now)
+            z = 300 - 50*t_now/taskTime
+            Rx, Ry, Rz = [0]*3
+            dx,dy,dz,dRx,dRy,dRz = [0]*6
         case _: 
             x   = y     = z     = 0
             Rx  = Ry    = Rz    = 0

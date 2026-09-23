@@ -14,10 +14,11 @@ Install dependency:
 
 import re
 import matplotlib.pyplot as plt
-import numpy
+import numpy as np
 import statistics as stat
-DESIRED_FILE = "PCC/Test_46/DesiredMotorPosition.txt"#"DesiredPosition.txt"
-CURRENT_FILE = "PCC/Test_46/CurrentMotorPosition.txt"#"CurrentPosition.txt"
+from mpl_toolkits.mplot3d import Axes3D
+_DESIRED_FILE = "PCC/Test_46/DesiredMotorPosition.txt"#"DesiredPosition.txt"
+_CURRENTFILE = "PCC/Test_46/CurrentMotorPosition.txt"#"CurrentPosition.txt"
 
 LINE_PATTERN = re.compile(r"t=(-?[\d.]+)s\s+\[([^\]]+)\]")
 
@@ -47,14 +48,14 @@ def parse_log(filename: str):
 
     return times, motor_vals
 
-def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _CURRENT_FILE="CurrentMotorPosition.txt", vel=False):
-    DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + _DESIRED_FILE 
-    CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + _CURRENT_FILE
+def EgoGraph(test: int, ctrl="PCC", __DESIRED_FILE="DesiredMotorPosition.txt", __CURRENTFILE="CurrentMotorPosition.txt", vel=False):
+    DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + __DESIRED_FILE 
+    CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + __CURRENTFILE
     desiredTimes, desiredPos = parse_log(DESIRED_LOCATION)
     currentTimes, currentPos = parse_log(CURRENT_LOCATION)
-    errPos = numpy.array(desiredPos) - numpy.array(currentPos)
-    desiredVel = numpy.zeros((len(desiredPos[0]),6))
-    currentVel = numpy.zeros((len(desiredPos[0]),6))
+    errPos = np.array(desiredPos) - np.array(currentPos)
+    desiredVel = np.zeros((len(desiredPos[0]),6))
+    currentVel = np.zeros((len(desiredPos[0]),6))
     fig, axes = plt.subplots(3, 2, figsize=(12, 9), sharex=True)
     axes = axes.flatten()
 
@@ -93,13 +94,13 @@ def EgoGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredMotorPosition.txt", _C
     fig.tight_layout()
     plt.show()
 
-def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CURRENT_FILE="CurrentTipPosition.txt", vel=False):
-    DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + _DESIRED_FILE 
-    CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + _CURRENT_FILE
+def GlobGraph(test: int, ctrl="PCC", __DESIRED_FILE="DesiredTipPosition.txt", __CURRENTFILE="CurrentTipPosition.txt", vel=False):
+    DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + __DESIRED_FILE 
+    CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + __CURRENTFILE
     desiredTimes, desiredPos = parse_log(DESIRED_LOCATION)
     currentTimes, currentPos = parse_log(CURRENT_LOCATION)
-    desiredVel = numpy.zeros((len(desiredPos),6))
-    currentVel = numpy.zeros((len(desiredPos),6))   
+    desiredVel = np.zeros((len(desiredPos),6))
+    currentVel = np.zeros((len(desiredPos),6))   
     fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
     axes = axes.flatten()
 
@@ -130,14 +131,70 @@ def GlobGraph(test: int, ctrl="PCC", _DESIRED_FILE="DesiredTipPosition.txt", _CU
     fig.tight_layout()
     print(f"Graphing Tip Data... \nTest {test} for {ctrl} control.\n")
     plt.show()
+def GlobGraph3D(test: int, ctrl="PCC", __DESIRED_FILE="DesiredTipPosition.txt", __CURRENTFILE="CurrentTipPosition.txt", vel=False):
+    DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + __DESIRED_FILE 
+    CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + __CURRENTFILE
+    _, desiredPos = parse_log(DESIRED_LOCATION)
+    _, currentPos = parse_log(CURRENT_LOCATION)
+    fig = plt.figure(figsize=(6,6))
+    axes = fig.add_subplot(111, projection='3d')
+    axes.plot(desiredPos[0],desiredPos[1],desiredPos[2],label="Desired Position", linestyle="--", color="tab:blue")
+    axes.plot(currentPos[0],currentPos[1],currentPos[2],label="Actual Position", color="tab:orange")
+    x = np.linspace(-200,200,20)
+    y = np.linspace(-200,200,20)
+    X, Y= np.meshgrid(x,y)
+    Z = np.zeros_like(X+Y)
+    axes.plot_surface(X,Y,Z,cmap="viridis", alpha=0.8)
+    #axes.scatter(0, 0, 0, color="black", s=40, label="base")
+    axes.scatter(0, 0, 320, color="black", s=40, label="Starting Point")
 
-def getTimeimeStatistics(timeSteps: list[float]):
+    axes.set_xlim(-200, 200)
+    axes.set_ylim(-200, 200)
+    axes.set_zlim(0, 350)
+
+    axes.set_xlabel("X (mm)")
+    axes.set_ylabel("Y (mm)")
+    axes.set_zlabel("Z (mm)")
+    axes.legend()
+    plt.show()
+
+def GlobErrorMetrics(test: int, ctrl: str = "PCC", _DESIRED_FILE: str = "DesiredTipPosition.txt", _CURRENTFILE: str = "CurrentTipPosition.txt") -> dict:
+    ''' Cartesian tip-tracking error for one test: per-timestep error norm,
+        RMSE, mean, and max error, comparing desired vs actual tip position.'''
+    desiredTimes, desiredPos = parse_log(f"{ctrl}/Test_{test}/{_DESIRED_FILE}")
+    _, currentPos = parse_log(f"{ctrl}/Test_{test}/{_CURRENTFILE}")
+    desired = np.array(desiredPos)[:3].T    # parse_log is axis-major [axis][sample] -> [sample][axis]
+    current = np.array(currentPos)[:3].T
+    err = np.linalg.norm(desired - current, axis=1)
+    return {
+        "times": desiredTimes,
+        "error": err,
+        "rmse": float(np.sqrt(np.mean(err**2))),
+        "mean_error": float(np.mean(err)),
+        "max_error": float(np.max(err)),
+    }
+def plotGlobError(test: int, ctrl: str = "PCC"):
+    ''' Error-norm-over-time plot for one test, with RMSE/max annotated. '''
+    m = GlobErrorMetrics(test, ctrl)
+    fig, ax = plt.subplots(figsize=(9, 4))
+    ax.plot(m["times"], m["error"], color="tab:red")
+    ax.axhline(m["rmse"], color="tab:blue", linestyle="--", label=f"RMSE = {m['rmse']:.2f} mm")
+    ax.axhline(m["max_error"], color="tab:orange", linestyle=":", label=f"Max = {m['max_error']:.2f} mm")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Cartesian tracking error (mm)")
+    ax.set_title(f"Tip Tracking Error - {ctrl} Test {test}")
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+    plt.show()
+
+def getTimeStatistics(timeSteps: list[float]):
     '''Returns: \nThe total timesteps, 
                 \nThe Mean step length, 
                 \nThe minimum step length, 
                 \nAnd the maximum step length of a single test.'''
     
-    deltaTime = numpy.zeros(len(timeSteps))
+    deltaTime = np.zeros(len(timeSteps))
     for i in range(1,len(timeSteps)-2):
         deltaTime[i] = timeSteps[i+1]-timeSteps[i]
     _NoTimeSteps = len(deltaTime)
@@ -152,21 +209,21 @@ def getTimeimeStatistics(timeSteps: list[float]):
     print(f"Min & Max Step Size:      {_minTimeStep}s | {_maxTimeStep}s")
     return _NoTimeSteps, _meanTimeSteps, _minTimeStep, _maxTimeStep
 
-def timeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
+def runTimeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
     if testRange is None:
         print("Failure to provide testRange")
         return None
     
     rangeDiff = testRange[1] - testRange[0]
-    timeStepN = numpy.zeros(rangeDiff)
-    timeStepAvg = numpy.zeros(rangeDiff)
-    timeStepMin = numpy.zeros(rangeDiff)
-    timeStepMax = numpy.zeros(rangeDiff)
+    timeStepN = np.zeros(rangeDiff)
+    timeStepAvg = np.zeros(rangeDiff)
+    timeStepMin = np.zeros(rangeDiff)
+    timeStepMax = np.zeros(rangeDiff)
     for i in range(testRange[0], testRange[1]):
         point = i - testRange[0]
         FILE = f"{ctrl}/Test_{i}/CurrentMotorPosition.txt" 
         times, _ = parse_log(FILE)
-        timeStepN[point], timeStepAvg[point], timeStepMin[point], timeStepMax[point] = getTimeimeStatistics(times)
+        timeStepN[point], timeStepAvg[point], timeStepMin[point], timeStepMax[point] = getTimeStatistics(times)
     print(f"\n------------------------------------------------------------------"+
           f"\n TIME STATISTICS FOR {ctrl} TESTS IN RANGE: [{testRange[0]} : {testRange[1]}]" +
           f"\n------------------------------------------------------------------\n")
@@ -195,7 +252,8 @@ def main():
     #timeStatistics([60, exampleTest])
     #EgoGraph(test = exampleTest)
     #EgoGraph(test = exampleTest, vel=True)
-    GlobGraph(test = exampleTest)
+    #GlobGraph3D(test = exampleTest)
+    plotGlobError(test=exampleTest)
 
 
 if __name__ == "__main__":

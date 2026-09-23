@@ -33,7 +33,12 @@ from math import sin as S
 from math import cos as C
 from math import pi as PI
 from CTRL import ContinuumRobot as control1
-import time
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, for `import main`
+from main import MOVEMENT_FUNCTIONS, setupTime, taskTime, packupTime, trajectory
+
 # ---- Robot parameters (from ContinuumRobot.py) ----
 NODES = 10
 SECTIONS = 2
@@ -160,23 +165,35 @@ def animate():
         ]
         return target
     
-    def mathCTRL(t_now: float):
-        const_1 = PI*0.2
-        x   , y   , z   = 50* S(const_1*t_now) *S(const_1*t_now/8), 50*C(const_1*t_now)*S(const_1*t_now/8), 300
-        Rx  , Ry  , Rz  = 0, 0, 0
-        
-        target = [x,y,z,Rx,Ry,Rz]
-        return target
-    
+    # Same phase shape as main.py's CTRL_INIT -> task loop -> finally-block
+    # packup, but driven in Cartesian space (rather than ego/motor space,
+    # like main.py does) since this simulator only ever talks to Robot via
+    # Cartesian targets -> FullIK. "Rest" is the fully-straight pose, the
+    # Cartesian analogue of main.py's ego=0.
+    restPose = np.array([0.0, 0.0, 2*Robot.sectL, 0.0, 0.0, 0.0])
+    taskStartPose = np.array(MOVEMENT_FUNCTIONS(0.0, trajectory)[0])
+    taskEndPose = np.array(MOVEMENT_FUNCTIONS(taskTime, trajectory)[0])
+    cycleLength = setupTime + taskTime + packupTime
+
+    def targetForCycleTime(t_cycle: float) -> list[float]:
+        if t_cycle < setupTime:                                  # CTRL_INIT-equivalent ramp-in
+            frac = t_cycle / setupTime
+            return (restPose + frac*(taskStartPose - restPose)).tolist()
+        elif t_cycle < setupTime + taskTime:                      # main trajectory
+            pos, _ = MOVEMENT_FUNCTIONS(t_cycle - setupTime, trajectory)
+            return pos
+        else:                                                     # packup-equivalent ramp-down
+            frac = (t_cycle - setupTime - taskTime) / packupTime
+            return (taskEndPose + frac*(restPose - taskEndPose)).tolist()
+
     def update(frame):
-        t = frame / 30  # seconds, ~100 fps
         t_now = time.monotonic() - t_start
-        #target = ctrlInput()
-        target = mathCTRL(t_now)
-        
+        t_cycle = t_now % cycleLength                             # loop forever until the window closes
+        target = targetForCycleTime(t_cycle)
+
         Robot.FullIK(target, [0] * 6)
-        
-        k1, r1, s1, k2, r2, s2 = Robot.getCylPos()
+
+        k1, r1, s1, k2, r2, s2 = Robot.targCylPos
 
         theta1 = s1*k1     # Amount of Bend
         theta2 = s2*k2
@@ -190,7 +207,7 @@ def animate():
         line.set_3d_properties(backbone[:, 2])
         return line,
 
-    ani = FuncAnimation(fig, update, frames=300, interval=33, blit=False)
+    ani = FuncAnimation(fig, update, interval=33, blit=False, cache_frame_data=False)
     plt.show()
 
 
