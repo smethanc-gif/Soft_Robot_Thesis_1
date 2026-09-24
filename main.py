@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 3                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 9                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -44,7 +44,7 @@ freq = 1/timeStep
 
 packupTime  = 2 # Time expected to move back to starting position
 
-## STEP-RETURN TEST (trajectory 9) ##
+## STEP-RETURN TEST (trajectory 9) 
 # Bend out to each (direction, bend) pair, come back to straight and hold, to
 # measure how far the robot fails to return (hysteresis / tendon slack).
 SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad)
@@ -55,40 +55,6 @@ SR_REST     = 3                                     # s, hold straight - residua
 SR_CYCLE    = 2*SR_RAMP + SR_HOLD + SR_REST
 SR_BEND_L   = 2*148.5                               # mm, both sections as one arc (sectL in constantCurve.py)
 SR_TOOL_L   = 30                                    # mm, toolLength in constantCurve.py
-
-def stepReturnSchedule(t_now: float) -> tuple[float, float, str, int]:
-    ''' Step-return test schedule at time t_now.\n
-        Returns (direction, current bend angle, phase, cycle index), where
-        phase is "out", "hold", "back", "rest" or "done".'''
-    n = len(SR_DIRS)*len(SR_BENDS)
-    i = int(max(t_now, 0) // SR_CYCLE)
-    if i >= n:
-        return 0.0, 0.0, "done", n
-    phi = SR_DIRS[i // len(SR_BENDS)]
-    bend = SR_BENDS[i % len(SR_BENDS)]
-    tc = max(t_now, 0) - i*SR_CYCLE
-    if tc < SR_RAMP:
-        return phi, bend*(1 - C(PI*tc/SR_RAMP))/2, "out", i
-    tc -= SR_RAMP
-    if tc < SR_HOLD:
-        return phi, bend, "hold", i
-    tc -= SR_HOLD
-    if tc < SR_RAMP:
-        return phi, bend*(1 + C(PI*tc/SR_RAMP))/2, "back", i
-    return phi, 0.0, "rest", i
-
-def stepReturnPose(phi: float, bend: float) -> list[float]:
-    ''' Tool pose for the whole bending length as one constant-curvature arc,
-        bent by `bend` rad in direction `phi`.'''
-    t = [S(bend)*C(phi), S(bend)*S(phi), C(bend)]            # tool axis
-    if bend < 1e-9:
-        p = [0.0, 0.0, SR_BEND_L]
-    else:
-        R = SR_BEND_L/bend
-        p = [R*(1 - C(bend))*C(phi), R*(1 - C(bend))*S(phi), R*S(bend)]
-    Rx = math.asin(t[1])                                      # inverse of _tangentFromAngles
-    Ry = math.atan2(t[0], t[2])
-    return [p[0] + SR_TOOL_L*t[0], p[1] + SR_TOOL_L*t[1], p[2] + SR_TOOL_L*t[2], Rx, Ry, 0]
 
 ## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
@@ -195,6 +161,41 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     positions = [x,y, z, Rx, Ry, Rz]
     velocities = [dx, dy, dz, dRx, dRy, dRz]
     return positions, velocities
+
+
+def stepReturnSchedule(t_now: float) -> tuple[float, float, str, int]:
+    ''' Step-return test schedule at time t_now.\n
+        Returns (direction, current bend angle, phase, cycle index), where
+        phase is "out", "hold", "back", "rest" or "done".'''
+    n = len(SR_DIRS)*len(SR_BENDS)
+    i = int(max(t_now, 0) // SR_CYCLE)
+    if i >= n:
+        return 0.0, 0.0, "done", n
+    phi = SR_DIRS[i // len(SR_BENDS)]
+    bend = SR_BENDS[i % len(SR_BENDS)]
+    tc = max(t_now, 0) - i*SR_CYCLE
+    if tc < SR_RAMP:
+        return phi, bend*(1 - C(PI*tc/SR_RAMP))/2, "out", i
+    tc -= SR_RAMP
+    if tc < SR_HOLD:
+        return phi, bend, "hold", i
+    tc -= SR_HOLD
+    if tc < SR_RAMP:
+        return phi, bend*(1 + C(PI*tc/SR_RAMP))/2, "back", i
+    return phi, 0.0, "rest", i
+
+def stepReturnPose(phi: float, bend: float) -> list[float]:
+    ''' Tool pose for the whole bending length as one constant-curvature arc,
+        bent by `bend` rad in direction `phi`.'''
+    t = [S(bend)*C(phi), S(bend)*S(phi), C(bend)]            # tool axis
+    if bend < 1e-9:
+        p = [0.0, 0.0, SR_BEND_L]
+    else:
+        R = SR_BEND_L/bend
+        p = [R*(1 - C(bend))*C(phi), R*(1 - C(bend))*S(phi), R*S(bend)]
+    Rx = math.asin(t[1])                                      # inverse of _tangentFromAngles
+    Ry = math.atan2(t[0], t[2])
+    return [p[0] + SR_TOOL_L*t[0], p[1] + SR_TOOL_L*t[1], p[2] + SR_TOOL_L*t[2], Rx, Ry, 0]
 
 def PD_TEST(t_now: float, tMode)-> tuple[list[float], list[float]]:
     match tMode:
