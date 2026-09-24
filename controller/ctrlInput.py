@@ -32,8 +32,8 @@ class Controller():
             but NOT yet speed-scaled - see process() for the actual request math.'''
         pygame.event.pump()
         self.LJ = self._deadzone2(np.array([self.CTRL.get_axis(0), -self.CTRL.get_axis(1)]), self.deadzone) # Position Input (rotated 90 degrees)
-        self.RJ = self._deadzone2(np.array([self.CTRL.get_axis(2), -self.CTRL.get_axis(3)]), self.deadzone) # Rotation Input
-        self.LT = self._deadzone1((self.CTRL.get_axis(4) + 1)/2, self.deadzone)                              # From -1 to 1
+        self.RJ = self._deadzone2(np.array([self.CTRL.get_axis(4), -self.CTRL.get_axis(3)]), self.deadzone) # Rotation Input
+        self.LT = self._deadzone1((self.CTRL.get_axis(2) + 1)/2, self.deadzone)                              # From -1 to 1
         self.RT = self._deadzone1((self.CTRL.get_axis(5) + 1)/2, self.deadzone)
         self.a_held = self.CTRL.get_button(0)
         self.x_held = self.CTRL.get_button(2)

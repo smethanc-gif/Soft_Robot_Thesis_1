@@ -12,7 +12,7 @@ from STM32_comms.pi_comm import STM32Comm
 from PCC_control.CTRL import ContinuumRobot
 from results import fileWriting as W
 from camera_feedback.robot_tracker import TipTracker
-from controller.ctrlInput import Controller
+from controller.ctrlInput import Controller as INPUT
 import results.Graphing as G
 
 ## COMMS ##
@@ -46,7 +46,7 @@ packupTime  = 1 # Time expected to move back to starting position
 
 ## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
-    ctrl = Controller()
+    ctrl = INPUT()
     taskTime = 1000
 elif trajectory == 5:
     taskTime = 100
