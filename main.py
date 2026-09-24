@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 5                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 3                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -42,7 +42,7 @@ setupTime   = 2 # Time expected to move into initial position
 timeStep = 0.04
 freq = 1/timeStep
 
-packupTime  = 1 # Time expected to move back to starting position
+packupTime  = 2 # Time expected to move back to starting position
 
 ## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
@@ -51,7 +51,7 @@ if trajectory == 3:
 elif trajectory == 5:
     taskTime = 100
 else:
-    taskTime    = 10
+    taskTime    = 30
     movementfreq = 2 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
@@ -66,7 +66,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     3 - Controller Input'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
-            x   , y   , z   = 150, 70*S(const_1*t_now), 220 + 30*C(const_1*t_now)
+            x   , y   , z   = 150, 30*S(const_1*t_now), 220 + 30*C(const_1*t_now)
             Rx  , Ry  , Rz  = 0,  PI/2, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
@@ -84,7 +84,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
 
         case 3:                                         ## Controller Input?
             ctrl.update()
-            x, y, z, Rx, Ry, Rz = ctrl.output()
+            x, y, z, Rx, Ry, Rz = ctrl.process()
             dx= dy= dz = 0
             dRx= dRy= dRz =0
 
@@ -114,12 +114,13 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
         case 7: # Figure 8
-            a = 110
+            a = 100
             x = a*C(const_1*t_now)/(1+(S(const_1*t_now))**2)
             y = a*S(const_1*t_now)*C(const_1*t_now)/(1+(S(const_1*t_now)**2))
             z = 300
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
+
         case 8: # 3D Helix
             radius = 90
             x = radius *C(const_1*t_now)
@@ -313,6 +314,7 @@ def main():
         stm.disable()
         stm.close()   
         G.EgoGraph(test=fileNumber)
+        G.GlobGraph3D(test=fileNumber)
         #G.EgoGraph(test = fileNumber, vel=True)
         #G.GlobGraph(test=fileNumber)
 

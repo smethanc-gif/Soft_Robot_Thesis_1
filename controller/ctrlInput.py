@@ -21,8 +21,8 @@ class Controller():
         self.y_held = 0
 
         self.request = np.array([0 , 0, 327, 0, 0, 0])
-        self.output = np.array([0 , 0, 327, 0, 0, 0])
-        self.maxSpeeds = [1, math.pi/64]        # mm/s / rads/s per update
+        self.output = np.array([0.0001 , 0.0001, 327, 0, 0, 0])
+        self.maxSpeeds = [1.0, math.pi/64]        # mm/s / rads/s per update
         self.min    = np.array([-200, -200, 0, -math.pi, -math.pi, 0])
         self.max    = np.array([200, 200, 327, math.pi, math.pi, 0])
         self.deadzone = 0.15                   # fraction of stick/trigger range to ignore near rest
@@ -49,13 +49,13 @@ class Controller():
             speed-scaled, accumulated, clamped 6-DOF request.'''
         UpPower = self.maxSpeeds[0] * (self.RT - self.LT)
         self.request = self.request + np.array([
-            self.maxSpeeds[0]*self.LJ[1], self.maxSpeeds[0]*self.LJ[0],
+            -self.maxSpeeds[0]*self.LJ[1], self.maxSpeeds[0]*self.LJ[0],
             UpPower,
             self.maxSpeeds[1]*self.RJ[0], self.maxSpeeds[1]*self.RJ[1],
             0
         ])
         self.output = self.clamp()
-        print(self.output)
+        #print(self.output)
         return self.output
 
     def clamp(self):

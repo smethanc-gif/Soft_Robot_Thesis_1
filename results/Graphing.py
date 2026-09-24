@@ -131,15 +131,19 @@ def GlobGraph(test: int, ctrl="PCC", __DESIRED_FILE="DesiredTipPosition.txt", __
     fig.tight_layout()
     print(f"Graphing Tip Data... \nTest {test} for {ctrl} control.\n")
     plt.show()
-def GlobGraph3D(test: int, ctrl="PCC", __DESIRED_FILE="DesiredTipPosition.txt", __CURRENTFILE="CurrentTipPosition.txt", vel=False):
+
+def GlobGraph3D(test: int, ctrl="PCC", __DESIRED_FILE="DesiredTipPosition.txt", __CURRENTFILE="CurrentTipPosition.txt", __CALCULATEDFILE="CalculatedTipPosition.txt", vel=False):
     DESIRED_LOCATION = f"{ctrl}/Test_{test}/" + __DESIRED_FILE 
     CURRENT_LOCATION = f"{ctrl}/Test_{test}/" + __CURRENTFILE
+    CALCULATED_LOCATION = f"{ctrl}/Test_{test}/" + __CALCULATEDFILE
     _, desiredPos = parse_log(DESIRED_LOCATION)
     _, currentPos = parse_log(CURRENT_LOCATION)
+    _, calculatedPos = parse_log(CALCULATED_LOCATION)
     fig = plt.figure(figsize=(6,6))
     axes = fig.add_subplot(111, projection='3d')
     axes.plot(desiredPos[0],desiredPos[1],desiredPos[2],label="Desired Position", linestyle="--", color="tab:blue")
     axes.plot(currentPos[0],currentPos[1],currentPos[2],label="Actual Position", color="tab:orange")
+    axes.plot(calculatedPos[0],calculatedPos[1],calculatedPos[2],label="Calculated Position", color="tab:green")
     x = np.linspace(-200,200,20)
     y = np.linspace(-200,200,20)
     X, Y= np.meshgrid(x,y)
@@ -248,12 +252,13 @@ def runTimeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
     
 
 def main():
-    exampleTest = 101
+    exampleTest = 115
+    
     #timeStatistics([60, exampleTest])
-    #EgoGraph(test = exampleTest)
+    EgoGraph(test = exampleTest)
     #EgoGraph(test = exampleTest, vel=True)
     #GlobGraph3D(test = exampleTest)
-    plotGlobError(test=exampleTest)
+    #plotGlobError(test=exampleTest)
 
 
 if __name__ == "__main__":
