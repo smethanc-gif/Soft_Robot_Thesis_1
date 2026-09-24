@@ -390,18 +390,283 @@ def modelResidualVsBend(tests: list[int], ctrl: str = "PCC", tail_fraction: floa
     }
 
 
+# ============================================================
+# Advisor deliverables: 3D tracking, metrics, speed / phase lag, error budget
+# ============================================================
+
+def loadMeta(test: int, ctrl: str = "PCC") -> dict:
+    ''' Run settings from TestInfo.txt (see fileWriting.writeMeta), numbers
+        converted. {} for tests logged before TestInfo.txt existed.'''
+    path = f"{ctrl}/Test_{test}/TestInfo.txt"
+    meta = {}
+    if not os.path.exists(path):
+        return meta
+    with open(path) as f:
+        for line in f:
+            if "=" not in line:
+                continue
+            key, value = (s.strip() for s in line.split("=", 1))
+            for cast in (int, float):
+                try:
+                    value = cast(value)
+                    break
+                except ValueError:
+                    pass
+            meta[key] = value
+    return meta
+
+
+def _period(des: numpy.ndarray, dt: float, meta: dict) -> float:
+    ''' Trajectory period (s): from TestInfo.txt when the trajectory is a
+        plain periodic one, otherwise the dominant FFT period of the desired
+        path on its most-moving axis.'''
+    mf, traj, T = meta.get("movementfreq"), meta.get("trajectory"), meta.get("taskTime")
+    if isinstance(mf, (int, float)) and mf > 0 and T:
+        if traj in (0, 4, 7, 8):
+            return T/mf
+        if traj == 1:                       # main.py doubles const_1 for the spiral
+            return T/(2*mf)
+    ax = numpy.argmax(des.std(axis=0))
+    x = des[:, ax] - des[:, ax].mean()
+    f = numpy.fft.rfftfreq(len(x), dt)
+    P = numpy.abs(numpy.fft.rfft(x))
+    return float(1/f[1 + numpy.argmax(P[1:])])
+
+
+def _rmse(a: numpy.ndarray, b: numpy.ndarray) -> float:
+    return float(numpy.sqrt(numpy.mean(numpy.sum((a - b)**2, axis=1))))
+
+
+def _bestLag(des: numpy.ndarray, cur: numpy.ndarray, ok: numpy.ndarray, dt: float, max_s: float = 1.0) -> tuple[int, float]:
+    ''' Delay (samples) of actual behind desired that minimises RMSE, and
+        that RMSE. Unlike phaseLag's cross-correlation this can't lock onto a
+        different cycle, and it reads directly as "error left if the robot
+        weren't late".'''
+    best = (0, numpy.inf)
+    for L in range(int(max_s/dt) + 1):
+        m = ok[L:] & ok[:len(ok) - L]
+        r = _rmse(des[:len(des) - L][m], cur[L:][m])
+        if r < best[1]:
+            best = (L, r)
+    return best
+
+
+def _prep(test: int, ctrl: str):
+    ''' Cleaned, t>=0 arrays shared by the functions below. '''
+    d = loadTest(test, ctrl)
+    curh, home = homeRef(d)
+    run = d["t"] >= 0
+    ok = cleanMask(d)[run]
+    dt = float(numpy.median(numpy.diff(d["t"][run])))
+    return d, run, ok, dt, curh[run], home
+
+
+def trackingMetrics(test: int, ctrl: str = "PCC") -> dict:
+    ''' Cartesian tracking of one test, desired vs actual tip (cleaned, t>=0):
+        error norm over time, mean, RMSE and max - both raw and
+        home-referenced - plus mean desired tip speed, time lag, phase lag
+        and period.'''
+    d, run, ok, dt, curh, home = _prep(test, ctrl)
+    meta = loadMeta(test, ctrl)
+    des, cur, t = d["des"][run, :3], d["cur"][run, :3], d["t"][run]
+    e_raw = numpy.linalg.norm(des - cur, axis=1)[ok]
+    e_home = numpy.linalg.norm(des - curh, axis=1)[ok]
+    L, rmse_lag = _bestLag(des, curh, ok, dt)
+    period = _period(des[ok], dt, meta)
+    return {"test": test, "ctrl": ctrl, "meta": meta, "n": int(ok.sum()),
+            "times": t[ok], "error": e_raw, "error_home": e_home,
+            "mean_error": float(e_raw.mean()), "rmse": float(numpy.sqrt(numpy.mean(e_raw**2))),
+            "max_error": float(e_raw.max()),
+            "mean_error_home": float(e_home.mean()), "rmse_home": float(numpy.sqrt(numpy.mean(e_home**2))),
+            "max_error_home": float(e_home.max()),
+            "speed": float(numpy.linalg.norm(numpy.diff(des, axis=0), axis=1).mean()/dt),
+            "lag_s": L*dt, "rmse_lag_removed": rmse_lag,
+            "period_s": period, "phase_deg": 360*L*dt/period,
+            "home_offset": home - numpy.array([0.0, 0.0, HOME_Z])}
+
+
+def trackingTable(tests: list[int], ctrl: str = "PCC", verbose: bool = True) -> list[dict]:
+    ''' trackingMetrics for several tests, printed as one table. '''
+    rows = [trackingMetrics(t, ctrl) for t in tests]
+    if verbose:
+        print(f"\nTracking metrics ({ctrl}) - raw | home-referenced")
+        print(" test | traj | speed mm/s |  n   | mean err  |   RMSE    |  max err   | lag s | phase deg")
+        for r in rows:
+            traj = r["meta"].get("trajectory", "?")
+            print(f" {r['test']:4d} | {str(traj):>4s} | {r['speed']:10.1f} | {r['n']:4d} | "
+                  f"{r['mean_error']:4.1f}|{r['mean_error_home']:4.1f} | {r['rmse']:4.1f}|{r['rmse_home']:4.1f} | "
+                  f"{r['max_error']:5.1f}|{r['max_error_home']:5.1f} | {r['lag_s']:5.2f} | {r['phase_deg']:6.1f}")
+    return rows
+
+
+def plotTracking3D(test: int, ctrl: str = "PCC", home_ref: bool = True):
+    ''' Desired vs actual (and model-calculated) tip path in 3D with equal
+        axes, plus the error norm over time with RMSE and max marked.'''
+    m = trackingMetrics(test, ctrl)
+    d, run, ok, dt, curh, _ = _prep(test, ctrl)
+    des, cal = d["des"][run, :3][ok], d["cal"][run, :3][ok]
+    cur = (curh if home_ref else d["cur"][run, :3])[ok]
+    err, rmse, mx = (m["error_home"], m["rmse_home"], m["max_error_home"]) if home_ref \
+        else (m["error"], m["rmse"], m["max_error"])
+
+    fig = plt.figure(figsize=(8, 10))
+    ax = fig.add_subplot(2, 1, 1, projection="3d")
+    ax.plot(*des.T, linestyle="--", color="tab:blue", label="Desired")
+    ax.plot(*cur.T, color="tab:orange", label="Actual" + (" (home-referenced)" if home_ref else ""))
+    ax.plot(*cal.T, color="tab:green", alpha=0.6, label="Model (calculated)")
+    allp = numpy.vstack([des, cur, cal])
+    centre = (allp.max(axis=0) + allp.min(axis=0))/2
+    half = (allp.max(axis=0) - allp.min(axis=0)).max()/2 + 5
+    ax.set_xlim(centre[0] - half, centre[0] + half)
+    ax.set_ylim(centre[1] - half, centre[1] + half)
+    ax.set_zlim(centre[2] - half, centre[2] + half)
+    ax.set_box_aspect((1, 1, 1))
+    ax.set_xlabel("X (mm)")
+    ax.set_ylabel("Y (mm)")
+    ax.set_zlabel("Z (mm)")
+    ax.set_title(f"{ctrl} Test {test} - RMSE {rmse:.1f} mm, max {mx:.1f} mm, "
+                 f"speed {m['speed']:.0f} mm/s, lag {m['lag_s']:.2f} s")
+    ax.legend(loc="upper left")
+
+    ax2 = fig.add_subplot(2, 1, 2)
+    ax2.plot(m["times"], err, color="tab:red", label="Error norm")
+    ax2.axhline(rmse, color="tab:blue", linestyle="--", label=f"RMSE = {rmse:.1f} mm")
+    ax2.axhline(mx, color="tab:orange", linestyle=":", label=f"Max = {mx:.1f} mm")
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("Cartesian tracking error (mm)")
+    ax2.legend()
+    ax2.grid(True)
+    fig.tight_layout()
+    plt.show()
+
+
+def plotSpeedStudy(tests: list[int], ctrl: str = "PCC", labels: dict = None):
+    ''' Tracking vs mean tip speed, one colour per trajectory (from
+        TestInfo.txt, or `labels` {test: name} for older tests).
+          - RMSE and lag-removed RMSE: the gap is what the lag costs.
+          - Time lag and phase lag: constant lag with rising phase = a fixed
+            delay; rising lag = the robot can't keep up.
+          - Gain: falling with speed would mean a bandwidth limit.'''
+    rows = trackingTable(tests, ctrl, verbose=False)
+    gains = [errorBudget(t, ctrl, verbose=False)["gain"] for t in tests]
+    labels = labels or {}
+    names = [labels.get(r["test"], f"traj {r['meta'].get('trajectory', '?')}") for r in rows]
+    groups = list(dict.fromkeys(names))
+    colours = dict(zip(groups, plt.cm.tab10(numpy.arange(len(groups)))))
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    for g in groups:
+        idx = sorted((i for i, n in enumerate(names) if n == g), key=lambda i: rows[i]["speed"])
+        sp = [rows[i]["speed"] for i in idx]
+        c = colours[g]
+        axes[0].plot(sp, [rows[i]["rmse_home"] for i in idx], "o-", color=c, label=f"{g}")
+        axes[0].plot(sp, [rows[i]["rmse_lag_removed"] for i in idx], "o--", color=c, alpha=0.5)
+        axes[1].plot(sp, [rows[i]["lag_s"] for i in idx], "o-", color=c, label=f"{g} lag")
+        axes[1].plot([], [], "s--", color=c, alpha=0.5, label=f"{g} phase")
+        axes[2].plot(sp, [gains[i] for i in idx], "o-", color=c, label=g)
+    ax1b = axes[1].twinx()
+    for g in groups:
+        idx = sorted((i for i, n in enumerate(names) if n == g), key=lambda i: rows[i]["speed"])
+        ax1b.plot([rows[i]["speed"] for i in idx], [rows[i]["phase_deg"] for i in idx], "s--",
+                  color=colours[g], alpha=0.5)
+    axes[0].set_title("RMSE (solid) vs RMSE with lag removed (dashed)")
+    axes[0].set_ylabel("RMSE, home-referenced (mm)")
+    axes[1].set_title("Time lag (solid) and phase lag (dashed)")
+    axes[1].set_ylabel("Lag (s)")
+    ax1b.set_ylabel("Phase lag (deg)")
+    axes[2].set_title("Displacement gain (actual / desired)")
+    axes[2].axhline(1.0, color="black", linewidth=0.8)
+    axes[2].set_ylabel("Gain")
+    for ax in axes:
+        ax.set_xlabel("Mean desired tip speed (mm/s)")
+        ax.grid(True)
+        ax.legend(fontsize=8)
+    fig.suptitle(f"{ctrl} speed study")
+    fig.tight_layout()
+    plt.show()
+
+
+def errorBudget(test: int, ctrl: str = "PCC", verbose: bool = True) -> dict:
+    ''' Where the desired-vs-actual offset comes from (advisor's question:
+        coordinate definitions, initial configuration, or the PCC model).
+        Removes one candidate cause at a time; RMSE after each step:
+          raw        - as logged
+          session    - minus the straight-pose XY offset measured before the
+                       run starts (initial configuration: marker pose lock,
+                       robot not quite straight)
+          z_datum    - also minus the straight-pose Z offset from the
+                       model's 327 mm (coordinate definition: tip-marker
+                       depth / straight length / marker plane)
+          lag        - also shifted by the best time lag (dynamics + camera)
+          gain       - also with the desired displacement from straight
+                       scaled by one least-squares gain (PCC model
+                       under-/over-bending)
+        What's left after "gain" is hysteresis and anything else - see
+        errorVsBend / stepReturn.'''
+    d, run, ok, dt, curh, home = _prep(test, ctrl)
+    des, cur = d["des"][run, :3], d["cur"][run, :3]
+    straight = numpy.array([0.0, 0.0, HOME_Z])
+    offset = home - straight
+    cur_xy = cur - numpy.array([offset[0], offset[1], 0.0])
+    steps = {"raw": _rmse(des[ok], cur[ok]),
+             "session": _rmse(des[ok], cur_xy[ok]),
+             "z_datum": _rmse(des[ok], curh[ok])}
+    L, steps["lag"] = _bestLag(des, curh, ok, dt)
+    m = ok[L:] & ok[:len(ok) - L]
+    a = des[:len(des) - L][m] - straight
+    b = curh[L:][m] - straight
+    gain = float(numpy.sum(a*b)/numpy.sum(a*a))
+    steps["gain"] = _rmse(gain*a, b)
+    out = {"test": test, "rmse": steps, "home_offset": offset, "lag_s": L*dt, "gain": gain}
+    if verbose:
+        print(f"Test_{test}: " + "  ->  ".join(f"{k} {v:5.1f}" for k, v in steps.items())
+              + f"   | home offset {numpy.round(offset, 1)} mm, lag {L*dt:.2f} s, gain {gain:.2f}")
+    return out
+
+
+def plotErrorBudget(tests: list[int], ctrl: str = "PCC"):
+    ''' RMSE after each errorBudget step, one group of bars per test. '''
+    res = [errorBudget(t, ctrl) for t in tests]
+    keys = list(res[0]["rmse"].keys())
+    names = {"raw": "Raw", "session": "- session XY offset", "z_datum": "- Z datum",
+             "lag": "- time lag", "gain": "- model gain (remaining)"}
+    x = numpy.arange(len(tests))
+    w = 0.8/len(keys)
+    fig, ax = plt.subplots(figsize=(max(8, 1.2*len(tests)), 4.5))
+    for i, k in enumerate(keys):
+        ax.bar(x + (i - (len(keys) - 1)/2)*w, [r["rmse"][k] for r in res], w, label=names[k])
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"Test {t}" for t in tests])
+    ax.set_ylabel("RMSE (mm)")
+    ax.set_title(f"{ctrl} error budget: RMSE left after removing each cause in turn")
+    ax.legend(fontsize=8)
+    ax.grid(True, axis="y")
+    fig.tight_layout()
+    plt.show()
+
+
 def main():
     # Run from the repo root (log paths are relative: PCC/Test_N/...)
-    print("=== Tracking error, Test 136 ===")
-    m = trackingErrorMetrics(136)
-    print(f"RMSE={m['rmse']:.2f}mm  mean={m['mean_error']:.2f}mm  max={m['max_error']:.2f}mm\n")
+    tests = [119, 120, 121, 122, 129, 130, 131, 132, 136]
+    trackingTable(tests)
 
-    print("=== Error vs bend, controller tests 136-137 ===")
+    print("\n=== Error budget (RMSE mm after removing each cause) ===")
+    for t in tests:
+        errorBudget(t)
+
+    print("\n=== Error vs bend, controller tests 136-137 ===")
     errorVsBend([136, 137])
 
 
+# Tests from before TestInfo.txt existed, for plotSpeedStudy's legend
+OLD_LABELS = {**{t: "V-spiral" for t in (119, 120, 121, 122)}, **{t: "Figure 8" for t in (129, 130, 131, 132)}}
+
 if __name__ == "__main__":
     main()
+    plotTracking3D(121)                 # simple
+    plotTracking3D(129)                 # more curvature variation
+    plotSpeedStudy([119, 120, 121, 122, 129, 130, 131, 132], labels=OLD_LABELS)
+    plotErrorBudget([119, 120, 121, 122, 129, 130, 131, 132, 136])
     #plotErrorVsBend([136, 137])
     #plotStepReturn(test=138)
     #plotSpeedSweep(tests=range(91,102,1))

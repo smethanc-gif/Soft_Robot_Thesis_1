@@ -11,7 +11,7 @@ import numpy as np
 from STM32_comms.pi_comm import STM32Comm
 from PCC_control.CTRL import ContinuumRobot
 from results import fileWriting as W
-from camera_feedback.robot_tracker import TipTracker
+from camera_feedback.robot_tracker import TipTracker, SMOOTHING
 from controller.ctrlInput import Controller as INPUT
 import results.Graphing as G
 
@@ -302,6 +302,9 @@ def main():
             stm.set_targets([0]*6, [0]*6)
             print("Motors Enabled\n")
         
+        W.writeMeta({"moveMode": moveMode, "trajectory": trajectory, "taskTime": taskTime,
+                     "movementfreq": globals().get("movementfreq", "n/a"),
+                     "timeStep": timeStep, "smoothing": SMOOTHING})
         t_offset, startStatus = CTRL_INIT(moveMode, trajectory, stm, tracker)
         if not startStatus:
             print("Something is wrong!\n")

@@ -9,6 +9,7 @@ CALCULATED_GLOB_FILE = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE = "CurrentTipPosition.txt"
 CYL_FILE = "CylinderParams.txt"     # PCC arc parameters [k1, r1, s1, k2, r2, s2]
 LIMITS_FILE = "LimitsHit.txt"       # PCC limit clamps [s1, s2, bend1, bend2] as 0/1
+META_FILE = "TestInfo.txt"          # run settings (trajectory, speed, ...), written once
 
 ## FOLDERS
 
@@ -87,6 +88,15 @@ def writeLimits(flags: list[int], timestamp: float):
     with open(filepath, "a") as f:
         vals = ", ".join(f"{int(p)}" for p in flags)
         f.write(f"t={timestamp:.3f}s  [{vals}]\n")
+
+def writeMeta(info: dict):
+    ''' Settings that are fixed for the whole run (trajectory, speed, ...),
+        written once per test as "key = value" lines. Adds to the per-timestep
+        logs from writeAll, doesn't replace them.'''
+    filepath = _path(META_FILE)
+    with open(filepath, "w") as f:
+        for key, value in info.items():
+            f.write(f"{key} = {value}\n")
 
 def writeAll(_desEgo: list[float], _currEgo: list[float], _desGlob: list[float], _calcGlob: list[float], _currGlob: list[float], _timestamp: float):
     working = True

@@ -65,7 +65,9 @@ ORIGIN_OFFSET_MM = np.array([117.75, 95.25, 0.0])
 # --- Output smoothing ---
 # Exponential moving average: weight of the newest reading (1.0 = no smoothing,
 # smaller = smoother but laggier).
-SMOOTHING = 0.3
+# Kept at 1.0 so the logged tip position has no filter lag - the phase-lag /
+# speed study relies on this (0.3 added ~0.1s of apparent lag). Smooth offline.
+SMOOTHING = 1.0
 
 # --- RealSense stream settings ---
 FRAME_W, FRAME_H, FPS = 640, 480, 30
