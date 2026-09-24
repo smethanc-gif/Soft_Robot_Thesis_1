@@ -7,6 +7,8 @@ CURRENT_EGO_FILE = "CurrentMotorPosition.txt"
 DESIRED_GLOB_FILE = "DesiredTipPosition.txt"
 CALCULATED_GLOB_FILE = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE = "CurrentTipPosition.txt"
+CYL_FILE = "CylinderParams.txt"     # PCC arc parameters [k1, r1, s1, k2, r2, s2]
+LIMITS_FILE = "LimitsHit.txt"       # PCC limit clamps [s1, s2, bend1, bend2] as 0/1
 
 ## FOLDERS
 
@@ -72,6 +74,18 @@ def writeCurrGlob(positions: list[float], timestamp: float):
     with open(filepath, "a") as f:
     
         vals = ", ".join(f"{p:.4f}" for p in positions)
+        f.write(f"t={timestamp:.3f}s  [{vals}]\n")
+
+def writeCyl(params: list[float], timestamp: float):
+    filepath = _path(CYL_FILE)
+    with open(filepath, "a") as f:
+        vals = ", ".join(f"{p:.6f}" for p in params)   # curvature is ~1e-3, needs the extra digits
+        f.write(f"t={timestamp:.3f}s  [{vals}]\n")
+
+def writeLimits(flags: list[int], timestamp: float):
+    filepath = _path(LIMITS_FILE)
+    with open(filepath, "a") as f:
+        vals = ", ".join(f"{int(p)}" for p in flags)
         f.write(f"t={timestamp:.3f}s  [{vals}]\n")
 
 def writeAll(_desEgo: list[float], _currEgo: list[float], _desGlob: list[float], _calcGlob: list[float], _currGlob: list[float], _timestamp: float):

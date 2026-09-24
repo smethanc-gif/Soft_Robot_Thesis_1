@@ -44,12 +44,60 @@ freq = 1/timeStep
 
 packupTime  = 2 # Time expected to move back to starting position
 
+## STEP-RETURN TEST (trajectory 9) ##
+# Bend out to each (direction, bend) pair, come back to straight and hold, to
+# measure how far the robot fails to return (hysteresis / tendon slack).
+SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad)
+SR_BENDS    = [PI/6, PI/3]                          # total bend angles, 30 & 60 deg
+SR_RAMP     = 2                                     # s, ramp out and ramp back each
+SR_HOLD     = 2                                     # s, hold bent
+SR_REST     = 3                                     # s, hold straight - residual measured here
+SR_CYCLE    = 2*SR_RAMP + SR_HOLD + SR_REST
+SR_BEND_L   = 2*148.5                               # mm, both sections as one arc (sectL in constantCurve.py)
+SR_TOOL_L   = 30                                    # mm, toolLength in constantCurve.py
+
+def stepReturnSchedule(t_now: float) -> tuple[float, float, str, int]:
+    ''' Step-return test schedule at time t_now.\n
+        Returns (direction, current bend angle, phase, cycle index), where
+        phase is "out", "hold", "back", "rest" or "done".'''
+    n = len(SR_DIRS)*len(SR_BENDS)
+    i = int(max(t_now, 0) // SR_CYCLE)
+    if i >= n:
+        return 0.0, 0.0, "done", n
+    phi = SR_DIRS[i // len(SR_BENDS)]
+    bend = SR_BENDS[i % len(SR_BENDS)]
+    tc = max(t_now, 0) - i*SR_CYCLE
+    if tc < SR_RAMP:
+        return phi, bend*(1 - C(PI*tc/SR_RAMP))/2, "out", i
+    tc -= SR_RAMP
+    if tc < SR_HOLD:
+        return phi, bend, "hold", i
+    tc -= SR_HOLD
+    if tc < SR_RAMP:
+        return phi, bend*(1 + C(PI*tc/SR_RAMP))/2, "back", i
+    return phi, 0.0, "rest", i
+
+def stepReturnPose(phi: float, bend: float) -> list[float]:
+    ''' Tool pose for the whole bending length as one constant-curvature arc,
+        bent by `bend` rad in direction `phi`.'''
+    t = [S(bend)*C(phi), S(bend)*S(phi), C(bend)]            # tool axis
+    if bend < 1e-9:
+        p = [0.0, 0.0, SR_BEND_L]
+    else:
+        R = SR_BEND_L/bend
+        p = [R*(1 - C(bend))*C(phi), R*(1 - C(bend))*S(phi), R*S(bend)]
+    Rx = math.asin(t[1])                                      # inverse of _tangentFromAngles
+    Ry = math.atan2(t[0], t[2])
+    return [p[0] + SR_TOOL_L*t[0], p[1] + SR_TOOL_L*t[1], p[2] + SR_TOOL_L*t[2], Rx, Ry, 0]
+
 ## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
     ctrl = INPUT()
     taskTime = 1000
 elif trajectory == 5:
     taskTime = 100
+elif trajectory == 9:
+    taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
     movementfreq = 2 # Amount of Repetitions of movement in the taskTime
@@ -63,7 +111,12 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     0 - Horizontal Circle\n
     1 - Vertical Spiral\n
     2 - Vertical Rotate\n
-    3 - Controller Input'''
+    3 - Controller Input\n
+    4 - Full Circle\n
+    5 - Butterfly\n
+    7 - Figure 8\n
+    8 - 3D Helix\n
+    9 - Step-return (hysteresis test)'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
             x   , y   , z   = 150, 30*S(const_1*t_now), 220 + 30*C(const_1*t_now)
@@ -128,7 +181,12 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             z = 300 - 50*t_now/taskTime
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
-        case _: 
+
+        case 9: # Step-return - see stepReturnSchedule()
+            phi, bend, _, _ = stepReturnSchedule(t_now)
+            x, y, z, Rx, Ry, Rz = stepReturnPose(phi, bend)
+            dx,dy,dz,dRx,dRy,dRz = [0]*6
+        case _:
             x   = y     = z     = 0
             Rx  = Ry    = Rz    = 0
             dx  = dy    = dz    = 0
@@ -199,6 +257,9 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
             prevGlobPos = currGlobPos
         t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
+        if mode == "PCC":
+            W.writeCyl(Robot.targCylPos, t_now)
+            W.writeLimits(Robot.limitFlags, t_now)
         stm.set_targets(initEgoPos, targEgoVel)
 
         t_init_end = time.monotonic()
@@ -289,6 +350,9 @@ def main():
             
             ## DOCUMENT
             fileNumber = W.writeAll(targEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now +t_offset)
+            if moveMode == "PCC":
+                W.writeCyl(Robot.targCylPos, t_now +t_offset)
+                W.writeLimits(Robot.limitFlags, t_now +t_offset)
 
             if trajectory == 3:
                 if ctrl.y_held == 1:

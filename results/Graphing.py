@@ -23,12 +23,13 @@ _CURRENTFILE = "PCC/Test_46/CurrentMotorPosition.txt"#"CurrentPosition.txt"
 LINE_PATTERN = re.compile(r"t=(-?[\d.]+)s\s+\[([^\]]+)\]")
 
 
-def parse_log(filename: str):
+def parse_log(filename: str, ncols: int = 6):
     """
     Parse a log file into (times, [motor0_vals, motor1_vals, ..., motor5_vals]).
+    ncols - values expected per line (6 for pose/motor logs, 4 for LimitsHit.txt)
     """
     times = []
-    motor_vals = [[] for _ in range(6)]
+    motor_vals = [[] for _ in range(ncols)]
 
     with open(filename, "r") as f:
         for line in f:
@@ -39,11 +40,11 @@ def parse_log(filename: str):
             t = float(match.group(1))
             vals = [float(v.strip()) for v in match.group(2).split(",")]
 
-            if len(vals) != 6:
+            if len(vals) != ncols:
                 continue  # skip malformed lines
 
             times.append(t)
-            for i in range(6):
+            for i in range(ncols):
                 motor_vals[i].append(vals[i])
 
     return times, motor_vals

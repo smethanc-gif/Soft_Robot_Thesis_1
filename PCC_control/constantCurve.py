@@ -34,6 +34,7 @@ class ConstantCurvature:
         self.sMax               = self.sectL
         self.thetaMax           = PI/2                # max bend angle k*s per section
         self.limitsHit          = []                 # which limits clamped on the last solve
+        self.limitFlags         = [0, 0, 0, 0]       # same, as 0/1 for logging: [s1, s2, bend1, bend2]
 
     def midpointCalc(self, targGlobPos: np.ndarray) -> np.ndarray:
         ''' Solve for the midpoint position that makes the tool tilt (Rx, Ry)
@@ -248,20 +249,27 @@ class ConstantCurvature:
             thetaMax). A clamp correction to s1 propagates half to s2 so the
             commanded pair stays consistent with the mechanical coupling'''
         hits = []
+        flags = [0, 0, 0, 0]
+        tol = 1e-3                              # mm - flag only real clamps, not float round-off at sMax
         s1c = min(max(s1, self.sMin), self.sMax)
         if s1c != s1:
             hits.append(f"sect1 s {s1:.1f} -> {s1c:.1f}")
+            flags[0] = int(abs(s1c - s1) > tol)
         s2c = s2 + 0.5*(s1c - s1)
         s2cl = min(max(s2c, self.sMin), self.sMax)
         if s2cl != s2c:
             hits.append(f"sect2 s {s2c:.1f} -> {s2cl:.1f}")
+            flags[1] = int(abs(s2cl - s2c) > tol)
         s2c = s2cl
         if k1*s1c > self.thetaMax:
             hits.append(f"sect1 bend {k1*s1c:.3f} -> {self.thetaMax:.3f} rad")
+            flags[2] = 1
             k1 = self.thetaMax/s1c
         if k2*s2c > self.thetaMax:
             hits.append(f"sect2 bend {k2*s2c:.3f} -> {self.thetaMax:.3f} rad")
+            flags[3] = 1
             k2 = self.thetaMax/s2c
+        self.limitFlags = flags
         return k1, s1c, k2, s2c, hits
 
     def PCC_Control(self, targGlobPos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
