@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 9                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 8                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -66,7 +66,7 @@ elif trajectory == 9:
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
-    movementfreq = 2 # Amount of Repetitions of movement in the taskTime
+    movementfreq = 5 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
@@ -381,8 +381,8 @@ def main():
         tracker.stop()
         stm.disable()
         stm.close()   
-        G.EgoGraph(test=fileNumber)
-        G.GlobGraph3D(test=fileNumber)
+        #G.EgoGraph(test=fileNumber)
+        #G.GlobGraph3D(test=fileNumber)
         #G.EgoGraph(test = fileNumber, vel=True)
         #G.GlobGraph(test=fileNumber)
 
