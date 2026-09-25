@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 8                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 9                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -66,7 +66,7 @@ elif trajectory == 9:
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
-    movementfreq = 5 # Amount of Repetitions of movement in the taskTime
+    movementfreq = 6 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
@@ -377,7 +377,10 @@ def main():
             endPoint = currEgoPos
             for t in range(round(packupTime*freq)):
                 stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
-                time.sleep(1/freq)
+                time.sleep(timeStep)
+            for t in range(round(2*freq)):
+                stm.set_targets([0]*6, [0] * 6)
+                time.sleep(timeStep)
         tracker.stop()
         stm.disable()
         stm.close()   

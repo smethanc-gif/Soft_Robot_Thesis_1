@@ -1,0 +1,6 @@
+moveMode = PCC
+trajectory = 9
+taskTime = 144
+movementfreq = n/a
+timeStep = 0.04
+smoothing = 1.0
