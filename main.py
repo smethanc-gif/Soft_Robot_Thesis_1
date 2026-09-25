@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 8                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 9                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -71,7 +71,7 @@ elif trajectory in (9, 10):
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
-    movementfreq = 5 # Amount of Repetitions of movement in the taskTime
+    movementfreq = 6 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
@@ -403,40 +403,12 @@ def main():
         print(f"Over the task, {overflowTracker} loops went overTime.")
         if currEgoPos is not None and motors_enabled:
             endPoint = currEgoPos
-            logPackup = taskFinished    # an aborted run packs up exactly as before, unlogged
-            straightPose = [0.0, 0.0, 2*Robot.sectL + Robot.toolLength, 0.0, 0.0, 0.0] if Robot is not None else [0.0]*6
-            # Ramp linearly to zero over packupTime, then hold at zero for packupHoldTime
-            for i in range(round(packupTime*freq) + round(packupHoldTime*freq)):
-                t_pack_start = time.monotonic()
-                packEgoPos = [pos * max(0.0, 1 - i/(freq * packupTime)) for pos in endPoint]
-                stm.set_targets(packEgoPos, [0] * 6)
-
-                ## DOCUMENT - the ramp back to straight and the hold at zero after it, on
-                ## the task's clock, with the straight pose as desired (like CTRL_INIT
-                ## logs its destination). A logging error only stops the logging,
-                ## never the pack-up.
-                if logPackup:
-                    try:
-                        t_log = t_pack_start - t_start + t_offset
-                        if i == 0:
-                            W.writeMeta({"packupStart": round(t_log, 3)}, append=True)   # analyse.loadTest leaves out rows from here on
-                        state = stm.get_state()
-                        if state is not None:
-                            currEgoPos = state
-                        cameraData = tracker.update()
-                        if Robot is not None and cameraData["position"] is not None:   # PD_test logs no tip, as in the task
-                            currGlobPos = list(cameraData["position"]) + [0]*3
-                        fileNumber = W.writeAll(packEgoPos, currEgoPos, straightPose, straightPose, currGlobPos, t_log)
-                        if moveMode == "PCC":
-                            W.writeCyl([0.0, 0.0, Robot.sectL, 0.0, 0.0, Robot.sectL], t_log)
-                            W.writeLimits([0, 0, 0, 0], t_log)
-                    except Exception as err:
-                        print(f"Stopped logging the pack-up: {err}\n")
-                        logPackup = False
-
-                t_loop = time.monotonic() - t_pack_start
-                if t_loop <= timeStep:
-                    time.sleep(timeStep-t_loop)
+            for t in range(round(packupTime*freq)):
+                stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
+                time.sleep(timeStep)
+            for t in range(round(2*freq)):
+                stm.set_targets([0]*6, [0] * 6)
+                time.sleep(timeStep)
         tracker.stop()
         stm.disable()
         stm.close()   
