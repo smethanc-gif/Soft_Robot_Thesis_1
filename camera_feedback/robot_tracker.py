@@ -72,9 +72,11 @@ SMOOTHING = 1.0
 # --- RealSense stream settings ---
 FRAME_W, FRAME_H, FPS = 640, 480, 30
 
-# Half-width of the pixel window sampled for depth around the tip centroid
-DEPTH_WIN = 1
-#DEPTH_ERODE_PX = 2
+# --- Depth sampling ---
+# Tip depth = median depth over the whole tip blob. Pixels this far in from the
+# blob's edge are dropped first, since rim pixels often pick up the depth of the
+# background behind the tip (0 = use the whole blob).
+DEPTH_ERODE_PX = 2
 
 # ============================================================
 # Tracker
@@ -106,6 +108,7 @@ class TipTracker:
         self.position = None
         self.open_kernel = np.ones((OPEN_KERNEL, OPEN_KERNEL), np.uint8)
         self.close_kernel = np.ones((CLOSE_KERNEL, CLOSE_KERNEL), np.uint8)
+        self.depth_erode_kernel = np.ones((2*DEPTH_ERODE_PX + 1, 2*DEPTH_ERODE_PX + 1), np.uint8)
 
         half = MARKER_SIZE_MM / 2
         self.marker_obj_points = np.array([[-half,  half, 0],
@@ -121,7 +124,6 @@ class TipTracker:
         if LOCK_COLOR_SENSOR:
             self._lock_colour_sensor()
 
-        #self.depth_erode_kernel = np.ones((DEPTH_ERODE_PX, DEPTH_ERODE_PX), np.uint8)
     # ---------------- camera ----------------
 
     def _start_camera(self):
@@ -204,7 +206,8 @@ class TipTracker:
     # ---------------- segmentation ----------------
 
     def segment_tip(self, frame):
-        # Returns (mask, centroid) - centroid is None if no valid blob
+        # Returns (mask, centroid, blob) - blob is a filled mask of just the tip
+        # blob; centroid and blob are None if there's no valid blob
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, HSV_LOWER, HSV_UPPER)
 
@@ -216,23 +219,28 @@ class TipTracker:
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = [c for c in contours if cv2.contourArea(c) >= MIN_BLOB_AREA]
         if not contours:
-            return mask, None
-        
-        M = cv2.moments(max(contours, key=cv2.contourArea))
+            return mask, None, None
+
+        tip = max(contours, key=cv2.contourArea)
+        M = cv2.moments(tip)
         if M["m00"] == 0:
-            return mask, None
+            return mask, None, None
         centroid = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-        
-        return mask, centroid
 
-    def tip_depth_mm(self, depth_image, cx, cy):
-        window = depth_image[max(cy - DEPTH_WIN, 0):cy + DEPTH_WIN + 1, max(cx - DEPTH_WIN, 0):cx + DEPTH_WIN +1]
-        # Median of valid depth pixels in a small window - single pixels are noisy
+        blob = np.zeros_like(mask)
+        cv2.drawContours(blob, [tip], -1, 255, thickness=cv2.FILLED)
+        return mask, centroid, blob
 
-        valid = window[window > 0]
+    def tip_depth_mm(self, depth_image, blob):
+        # Median of the valid depth pixels over the tip blob (depth is aligned
+        # to the colour frame, so the blob indexes it directly), rim eroded off
+        core = cv2.erode(blob, self.depth_erode_kernel) if DEPTH_ERODE_PX > 0 else blob
+        valid = depth_image[(core > 0) & (depth_image > 0)]
+        if valid.size == 0:     # blob too small to survive the erosion - use all of it
+            valid = depth_image[(blob > 0) & (depth_image > 0)]
         if valid.size == 0:
             return None
-        depth = float((np.median(valid)) * self.depth_scale * 1000)
+        depth = float(np.median(valid) * self.depth_scale * 1000)
         #print(f"Tip depth from camera: {depth}mm\n")
         return depth
 
@@ -259,13 +267,13 @@ class TipTracker:
                     "frame": None, "mask": None, "centroid": None}
 
         self.update_marker_pose(frame)
-        mask, centroid = self.segment_tip(frame)
+        mask, centroid, blob = self.segment_tip(frame)
 
         position = None
         status = "no tip found"
         if centroid is not None:
             cx, cy = centroid
-            d_mm = self.tip_depth_mm(depth_image, cx, cy)
+            d_mm = self.tip_depth_mm(depth_image, blob)
             if d_mm is None:
                 status = "tip found, no depth data"
             elif not self.pose_locked:

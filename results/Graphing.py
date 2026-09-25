@@ -253,12 +253,12 @@ def runTimeStatistics(testRange: list[int], testPeriods = None, ctrl="PCC"):
     
 
 def main():
-    exampleTest = 115
+    exampleTest = 146
     
     #timeStatistics([60, exampleTest])
-    EgoGraph(test = exampleTest)
+    #EgoGraph(test = exampleTest)
     #EgoGraph(test = exampleTest, vel=True)
-    #GlobGraph3D(test = exampleTest)
+    GlobGraph3D(test = exampleTest)
     #plotGlobError(test=exampleTest)
 
 

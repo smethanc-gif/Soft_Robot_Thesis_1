@@ -15,16 +15,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 from PCC_control.CTRL import ContinuumRobot
 
 HOME_Z = 327.0  # straight tool-tip height of the PCC model: 2*sectL + toolLength
+TOOL_L = 30.0   # toolLength in constantCurve.py
 
 
 # ============================================================
 # Loading / cleaning
 # ============================================================
 
-def loadTest(test: int, ctrl: str = "PCC") -> dict:
+def loadTest(test: int, ctrl: str = "PCC", packup: bool = False) -> dict:
     ''' All logs of one test as numpy arrays [sample][value], trimmed to a
         common length. "cyl" and "lim" are only present for tests logged after
-        CylinderParams.txt / LimitsHit.txt were added.'''
+        CylinderParams.txt / LimitsHit.txt were added.
+        Pack-up rows (logged after the task, from TestInfo.txt's packupStart
+        on) are left out unless packup=True, so t >= 0 is always just the
+        task.'''
     folder = f"{ctrl}/Test_{test}"
     d = {}
     for key, name in [("des", "DesiredTipPosition"), ("cal", "CalculatedTipPosition"),
@@ -40,17 +44,29 @@ def loadTest(test: int, ctrl: str = "PCC") -> dict:
         _, vals = parse_log(f"{folder}/LimitsHit.txt", ncols=4)
         d["lim"] = numpy.array(vals).T
     n = min(len(v) for v in d.values())
-    return {k: v[:n] for k, v in d.items()}
+    d = {k: v[:n] for k, v in d.items()}
+    packupStart = loadMeta(test, ctrl).get("packupStart")
+    if not packup and isinstance(packupStart, (int, float)):
+        task = d["t"] < packupStart
+        d = {k: v[task] for k, v in d.items()}
+    return d
 
 
-def cleanMask(d: dict, motor_tol: float = 0.5) -> numpy.ndarray:
-    ''' True for samples worth trusting: every motor within motor_tol rad of
-        its target (rules out the STM32 state freezes/jumps seen in e.g. Test
-        108, 123, 137) and a fresh camera frame (main.py repeats the previous
-        position on a missed frame).'''
-    motor_ok = numpy.abs(d["dm"] - d["cm"]).max(axis=1) <= motor_tol
-    fresh = numpy.r_[True, numpy.any(numpy.diff(d["cur"][:, :3], axis=0) != 0, axis=1)]
-    return motor_ok & fresh
+def cameraGate(d: dict, max_jump_mm: float = 200.0) -> numpy.ndarray:
+    ''' True for every sample except camera readings that jump more than
+        max_jump_mm from the last accepted reading - the tracker locking onto
+        a false blob when the tip is hidden (e.g. ~550 mm jumps to
+        (-70, 445, -40) at t~83-86 s in every step-return run). Everything
+        else is kept raw: no motor or repeated-frame filtering.'''
+    cur = d["cur"][:, :3]
+    keep = numpy.ones(len(cur), dtype=bool)
+    last = cur[0]
+    for i in range(1, len(cur)):
+        if numpy.linalg.norm(cur[i] - last) > max_jump_mm:
+            keep[i] = False
+        else:
+            last = cur[i]
+    return keep
 
 
 def homeRef(d: dict, pre_t: float = -1.8, z0: float = HOME_Z) -> tuple[numpy.ndarray, numpy.ndarray]:
@@ -59,6 +75,16 @@ def homeRef(d: dict, pre_t: float = -1.8, z0: float = HOME_Z) -> tuple[numpy.nda
         per-session marker pose-lock offset. Returns (shifted xyz, raw home).'''
     home = d["cur"][d["t"] < pre_t, :3].mean(axis=0)
     return d["cur"][:, :3] - home + numpy.array([0.0, 0.0, z0]), home
+
+
+def _stepReturnBend(des: numpy.ndarray) -> numpy.ndarray:
+    ''' Total commanded bend (rad) of main.py's step-return poses.
+        C-shape (traj 9): the tool tilts with the bend, so bend = tilt.
+        S-shape (traj 10): the tool stays vertical and the equal-and-opposite
+        arcs put the tip at xy / (z - tool) = tan(bend/4).'''
+    tilt = _bendFromPose(des)
+    sBend = 4*numpy.arctan2(numpy.hypot(des[:, 0], des[:, 1]), des[:, 2] - TOOL_L)
+    return numpy.where(tilt > 1e-6, tilt, sBend)
 
 
 def _bendFromPose(pose: numpy.ndarray) -> numpy.ndarray:
@@ -93,7 +119,7 @@ def bendParams(d: dict, step: int = 1) -> tuple[numpy.ndarray, numpy.ndarray, nu
 def errorVsBend(tests: list[int], ctrl: str = "PCC", bins=(0, 10, 20, 30, 45, 60, 90, 120, 180),
                 step: int = 2, verbose: bool = True) -> dict:
     ''' Tip error binned by total commanded bend |k1*s1| + |k2*s2| (deg),
-        pooled over `tests`, cleaned (cleanMask) and home-referenced (homeRef).
+        pooled over `tests`, camera-gated (cameraGate) and home-referenced (homeRef).
         gain = actual tip displacement from straight / model displacement:
         <1 the robot under-bends, >1 it is further out than commanded
         (at low bend that means it hasn't come back - hysteresis).'''
@@ -102,7 +128,7 @@ def errorVsBend(tests: list[int], ctrl: str = "PCC", bins=(0, 10, 20, 30, 45, 60
         d = loadTest(t, ctrl)
         curh, home = homeRef(d)
         idx, cyl, fk, lim = bendParams(d, step)
-        keep = cleanMask(d)[idx] & (d["t"][idx] >= 0)
+        keep = cameraGate(d)[idx] & (d["t"][idx] >= 0)
         idx, cyl, fk, lim = idx[keep], cyl[keep], fk[keep], lim[keep]
         straight = numpy.array([0.0, 0.0, HOME_Z])
         pooled["bend"].append(numpy.degrees(numpy.abs(cyl[:, 0]*cyl[:, 2]) + numpy.abs(cyl[:, 3]*cyl[:, 5])))
@@ -113,7 +139,7 @@ def errorVsBend(tests: list[int], ctrl: str = "PCC", bins=(0, 10, 20, 30, 45, 60
         pooled["dz"].append(curh[idx, 2] - fk[:, 2])
         pooled["lim"].append(lim)
         if verbose:
-            print(f"Test_{t}: {keep.sum()} clean samples, session home offset {numpy.round(home - straight, 1)} mm")
+            print(f"Test_{t}: {keep.sum()} samples ({(~keep).sum()} camera jumps rejected), session home offset {numpy.round(home - straight, 1)} mm")
     p = {k: numpy.concatenate(v) for k, v in pooled.items()}
 
     rows = []
@@ -168,9 +194,10 @@ def plotErrorVsBend(tests: list[int], ctrl: str = "PCC"):
 def stepReturn(test: int, ctrl: str = "PCC", settle_s: float = 1.0, verbose: bool = True) -> list[dict]:
     ''' For each "straight hold" of a step-return test, the tip residual left
         over from the preceding bend. Segments are found from the logged
-        desired pose (no dependency on main.py's constants): a rest is a run
-        of desired bend ~0 after t=0, and it belongs to the bend just before
-        it. The first settle_s of each rest is skipped.
+        desired pose (no dependency on main.py's constants), for both the
+        C-shape (traj 9) and S-shape (traj 10) versions: a rest is a run of
+        desired bend ~0 after t=0, and it belongs to the bend just before it.
+        The first settle_s of each rest is skipped.
           residual     - home-referenced actual - model tip, mean over the rest
           along        - residual component along the prior bend direction
                          (positive = still bent that way)
@@ -180,8 +207,8 @@ def stepReturn(test: int, ctrl: str = "PCC", settle_s: float = 1.0, verbose: boo
                          commanded. This is what backlash compensation needs.'''
     d = loadTest(test, ctrl)
     curh, _ = homeRef(d)
-    ok = cleanMask(d)
-    bend = _bendFromPose(d["des"])
+    ok = cameraGate(d)
+    bend = _stepReturnBend(d["des"])
     run = d["t"] >= 0
     straight = run & (bend < numpy.radians(0.5))
 
@@ -225,11 +252,53 @@ def stepReturn(test: int, ctrl: str = "PCC", settle_s: float = 1.0, verbose: boo
     return results
 
 
-def plotStepReturn(test: int, ctrl: str = "PCC"):
-    ''' Polar plot of the straight-hold residual after each bend: the arrow
-        from the origin shows where the tip is left, coloured by prior bend
-        angle, with a marker at the prior bend direction.'''
+def plotStepReturn(test: int, ctrl: str = "PCC", isCartesian: bool = True):
+    ''' Where the tip rests (XY, mm, home-referenced) during each straight
+        hold of a step-return test.
+        Cartesian (default): one arrow per hold from straight (origin) to the
+        rest position, coloured by the direction of the bend it just came
+        back from (dashed line, same colour); marker shape = size of that
+        bend (see legend). Arrows lying along their own dashed line =
+        the robot stays bent the way it came from (hysteresis); arrows all
+        pointing one way regardless of colour = drift.
+        isCartesian=False: the original polar view (dot = prior bend
+        direction at the residual's radius).'''
     res = stepReturn(test, ctrl)
+    shape = {9: " (C-shape)", 10: " (S-shape)"}.get(loadMeta(test, ctrl).get("trajectory"), "")
+    if isCartesian:
+        fig, ax = plt.subplots(figsize=(7, 7))
+        levels = sorted({round(r["bend_deg"]) for r in res})
+        markers = dict(zip(levels, "o^sDvP*X"))
+        dirs = sorted({round(r["dir_deg"]) % 360 for r in res})
+        colours = dict(zip(dirs, plt.cm.hsv(numpy.linspace(0, 0.9, len(dirs)))))
+        reach = max([r["residual_xy"] for r in res] + [1.0])*1.25
+        for dd in dirs:                                      # prior bend directions
+            u = numpy.radians(dd)
+            ax.plot([0, reach*numpy.cos(u)], [0, reach*numpy.sin(u)], "--",
+                    color=colours[dd], alpha=0.8, linewidth=1.5, label=f"after {dd}° direction", zorder=3)
+        for r in res:
+            c = colours[round(r["dir_deg"]) % 360]
+            x, y = r["residual"][:2]
+            ax.annotate("", xy=(x, y), xytext=(0, 0), arrowprops=dict(arrowstyle="->", color=c, linewidth=1.5))
+            ax.plot(x, y, markers[round(r["bend_deg"])], color=c, markersize=7,
+                    markeredgecolor="black", markeredgewidth=0.5)
+        for b in levels:
+            ax.plot([], [], markers[b], color="gray", label=f"after {b}° bend")
+        ax.axhline(0, color="black", linewidth=0.6)
+        ax.axvline(0, color="black", linewidth=0.6)
+        ax.set_xlim(-reach, reach)
+        ax.set_ylim(-reach, reach)
+        ax.set_aspect("equal")
+        ax.set_xlabel("X residual (mm)")
+        ax.set_ylabel("Y residual (mm)")
+        ax.set_title(f"Step-return{shape} rest position after each bend, {ctrl} Test {test}\n"
+                     f"(arrow along its dashed line = hysteresis; all one way = drift)")
+        ax.legend(fontsize=8, loc="center left", bbox_to_anchor=(1.01, 0.5))
+        ax.grid(True)
+        fig.tight_layout()
+        plt.show()
+        return
+
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection="polar")
     bends = sorted({round(r["bend_deg"]) for r in res})
@@ -452,17 +521,17 @@ def _bestLag(des: numpy.ndarray, cur: numpy.ndarray, ok: numpy.ndarray, dt: floa
 
 
 def _prep(test: int, ctrl: str):
-    ''' Cleaned, t>=0 arrays shared by the functions below. '''
+    ''' Camera-gated, t>=0 arrays shared by the functions below. '''
     d = loadTest(test, ctrl)
     curh, home = homeRef(d)
     run = d["t"] >= 0
-    ok = cleanMask(d)[run]
+    ok = cameraGate(d)[run]
     dt = float(numpy.median(numpy.diff(d["t"][run])))
     return d, run, ok, dt, curh[run], home
 
 
 def trackingMetrics(test: int, ctrl: str = "PCC") -> dict:
-    ''' Cartesian tracking of one test, desired vs actual tip (cleaned, t>=0):
+    ''' Cartesian tracking of one test, desired vs actual tip (camera-gated, t>=0):
         error norm over time, mean, RMSE and max - both raw and
         home-referenced - plus mean desired tip speed, time lag, phase lag
         and period.'''
@@ -474,6 +543,7 @@ def trackingMetrics(test: int, ctrl: str = "PCC") -> dict:
     L, rmse_lag = _bestLag(des, curh, ok, dt)
     period = _period(des[ok], dt, meta)
     return {"test": test, "ctrl": ctrl, "meta": meta, "n": int(ok.sum()),
+            "n_rejected": int((~ok).sum()), "kept": ok,
             "times": t[ok], "error": e_raw, "error_home": e_home,
             "mean_error": float(e_raw.mean()), "rmse": float(numpy.sqrt(numpy.mean(e_raw**2))),
             "max_error": float(e_raw.max()),
@@ -490,10 +560,10 @@ def trackingTable(tests: list[int], ctrl: str = "PCC", verbose: bool = True) -> 
     rows = [trackingMetrics(t, ctrl) for t in tests]
     if verbose:
         print(f"\nTracking metrics ({ctrl}) - raw | home-referenced")
-        print(" test | traj | speed mm/s |  n   | mean err  |   RMSE    |  max err   | lag s | phase deg")
+        print(" test | traj | speed mm/s |  n   | rejected | mean err  |   RMSE    |  max err   | lag s | phase deg")
         for r in rows:
             traj = r["meta"].get("trajectory", "?")
-            print(f" {r['test']:4d} | {str(traj):>4s} | {r['speed']:10.1f} | {r['n']:4d} | "
+            print(f" {r['test']:4d} | {str(traj):>4s} | {r['speed']:10.1f} | {r['n']:4d} | {r['n_rejected']:8d} | "
                   f"{r['mean_error']:4.1f}|{r['mean_error_home']:4.1f} | {r['rmse']:4.1f}|{r['rmse_home']:4.1f} | "
                   f"{r['max_error']:5.1f}|{r['max_error_home']:5.1f} | {r['lag_s']:5.2f} | {r['phase_deg']:6.1f}")
     return rows
@@ -501,20 +571,24 @@ def trackingTable(tests: list[int], ctrl: str = "PCC", verbose: bool = True) -> 
 
 def plotTracking3D(test: int, ctrl: str = "PCC", home_ref: bool = True):
     ''' Desired vs actual (and model-calculated) tip path in 3D with equal
-        axes, plus the error norm over time with RMSE and max marked.'''
+        axes, plus the error norm over time with RMSE and max marked. The raw
+        camera path (including rejected jumps) is drawn in grey underneath;
+        the actual path breaks at rejected samples instead of bridging them.'''
     m = trackingMetrics(test, ctrl)
     d, run, ok, dt, curh, _ = _prep(test, ctrl)
-    des, cal = d["des"][run, :3][ok], d["cal"][run, :3][ok]
-    cur = (curh if home_ref else d["cur"][run, :3])[ok]
+    des, cal = d["des"][run, :3], d["cal"][run, :3]
+    raw = curh if home_ref else d["cur"][run, :3]
+    cur = numpy.where(ok[:, None], raw, numpy.nan)
     err, rmse, mx = (m["error_home"], m["rmse_home"], m["max_error_home"]) if home_ref \
         else (m["error"], m["rmse"], m["max_error"])
 
     fig = plt.figure(figsize=(8, 10))
     ax = fig.add_subplot(2, 1, 1, projection="3d")
+    ax.plot(*raw.T, color="tab:gray", alpha=0.35, linewidth=0.8, label="Raw camera (incl. rejected jumps)")
     ax.plot(*des.T, linestyle="--", color="tab:blue", label="Desired")
     ax.plot(*cur.T, color="tab:orange", label="Actual" + (" (home-referenced)" if home_ref else ""))
     ax.plot(*cal.T, color="tab:green", alpha=0.6, label="Model (calculated)")
-    allp = numpy.vstack([des, cur, cal])
+    allp = numpy.vstack([des, raw[ok], cal])     # rejected jumps would blow out the axes
     centre = (allp.max(axis=0) + allp.min(axis=0))/2
     half = (allp.max(axis=0) - allp.min(axis=0)).max()/2 + 5
     ax.set_xlim(centre[0] - half, centre[0] + half)
@@ -524,8 +598,9 @@ def plotTracking3D(test: int, ctrl: str = "PCC", home_ref: bool = True):
     ax.set_xlabel("X (mm)")
     ax.set_ylabel("Y (mm)")
     ax.set_zlabel("Z (mm)")
-    ax.set_title(f"{ctrl} Test {test} - RMSE {rmse:.1f} mm, max {mx:.1f} mm, "
-                 f"speed {m['speed']:.0f} mm/s, lag {m['lag_s']:.2f} s")
+    ax.set_title(f"{ctrl} Test {test}: RMSE {rmse:.1f} mm, max {mx:.1f} mm\n"
+                 f"mean speed {m['speed']:.0f} mm/s, best-fit lag {m['lag_s']:.2f} s "
+                 f"({m['phase_deg']:.0f}°), whole run")
     ax.legend(loc="upper left")
 
     ax2 = fig.add_subplot(2, 1, 2)
@@ -601,8 +676,14 @@ def errorBudget(test: int, ctrl: str = "PCC", verbose: bool = True) -> dict:
           gain       - also with the desired displacement from straight
                        scaled by one least-squares gain (PCC model
                        under-/over-bending)
-        What's left after "gain" is hysteresis and anything else - see
-        errorVsBend / stepReturn.'''
+          similarity - instead of "gain", starting again from the "lag"
+                       stage: XY fitted as actual = s*R(psi)*desired + c
+                       (scale, rotation, shift; Z as after "lag"). What's
+                       left is error in the SHAPE of the path, not its
+                       size/position. Returned as scale, rotation_deg,
+                       shift_xy.
+        What's left after "gain" / "similarity" is hysteresis, drift and
+        anything else - see errorVsBend / stepReturn.'''
     d, run, ok, dt, curh, home = _prep(test, ctrl)
     des, cur = d["des"][run, :3], d["cur"][run, :3]
     straight = numpy.array([0.0, 0.0, HOME_Z])
@@ -617,10 +698,22 @@ def errorBudget(test: int, ctrl: str = "PCC", verbose: bool = True) -> dict:
     b = curh[L:][m] - straight
     gain = float(numpy.sum(a*b)/numpy.sum(a*a))
     steps["gain"] = _rmse(gain*a, b)
-    out = {"test": test, "rmse": steps, "home_offset": offset, "lag_s": L*dt, "gain": gain}
+
+    # Similarity fit in the XY plane as complex numbers: b = coef*a + shift
+    za = a[:, 0] + 1j*a[:, 1]
+    zb = b[:, 0] + 1j*b[:, 1]
+    (coef, shift), *_ = numpy.linalg.lstsq(numpy.c_[za, numpy.ones_like(za)], zb, rcond=None)
+    zfit = coef*za + shift
+    fit = numpy.c_[zfit.real, zfit.imag, a[:, 2]]
+    steps["similarity"] = _rmse(fit, b)
+
+    out = {"test": test, "rmse": steps, "home_offset": offset, "lag_s": L*dt, "gain": gain,
+           "scale": float(abs(coef)), "rotation_deg": float(numpy.degrees(numpy.angle(coef))),
+           "shift_xy": numpy.array([shift.real, shift.imag])}
     if verbose:
         print(f"Test_{test}: " + "  ->  ".join(f"{k} {v:5.1f}" for k, v in steps.items())
-              + f"   | home offset {numpy.round(offset, 1)} mm, lag {L*dt:.2f} s, gain {gain:.2f}")
+              + f"   | home offset {numpy.round(offset, 1)} mm, lag {L*dt:.2f} s, gain {gain:.2f}"
+              + f" | xy scale {out['scale']:.2f}, rotation {out['rotation_deg']:.1f}°, shift {numpy.round(out['shift_xy'], 1)} mm")
     return out
 
 
@@ -629,7 +722,8 @@ def plotErrorBudget(tests: list[int], ctrl: str = "PCC"):
     res = [errorBudget(t, ctrl) for t in tests]
     keys = list(res[0]["rmse"].keys())
     names = {"raw": "Raw", "session": "- session XY offset", "z_datum": "- Z datum",
-             "lag": "- time lag", "gain": "- model gain (remaining)"}
+             "lag": "- time lag", "gain": "- model gain (remaining)",
+             "similarity": "- xy scale/rotation/shift (instead of gain)"}
     x = numpy.arange(len(tests))
     w = 0.8/len(keys)
     fig, ax = plt.subplots(figsize=(max(8, 1.2*len(tests)), 4.5))
@@ -647,15 +741,16 @@ def plotErrorBudget(tests: list[int], ctrl: str = "PCC"):
 
 def main():
     # Run from the repo root (log paths are relative: PCC/Test_N/...)
-    tests = [119, 120, 121, 122, 129, 130, 131, 132, 136]
-    trackingTable(tests)
+    tests = [139, 140, 141, 142, 144, 145, 146, 147, 149, 150, 151, 152, 153, 154, 155, 157, 158, 160, 161, 162, 163, 164, 165, 166, 167] # From test day 2
+    # trackingTable(tests)
+    #plotSpeedStudy(tests)
+    #plotErrorBudget(tests)
+    # print("\n=== Error budget (RMSE mm after removing each cause) ===")
+    # for t in tests:
+    #     errorBudget(t)
 
-    print("\n=== Error budget (RMSE mm after removing each cause) ===")
-    for t in tests:
-        errorBudget(t)
-
-    print("\n=== Error vs bend, controller tests 136-137 ===")
-    errorVsBend([136, 137])
+    # print("\n=== Error vs bend, controller tests 136-137 ===")
+    # errorVsBend([136, 137])
 
 
 # Tests from before TestInfo.txt existed, for plotSpeedStudy's legend
@@ -663,11 +758,11 @@ OLD_LABELS = {**{t: "V-spiral" for t in (119, 120, 121, 122)}, **{t: "Figure 8" 
 
 if __name__ == "__main__":
     main()
-    plotTracking3D(121)                 # simple
-    plotTracking3D(129)                 # more curvature variation
-    plotSpeedStudy([119, 120, 121, 122, 129, 130, 131, 132], labels=OLD_LABELS)
-    plotErrorBudget([119, 120, 121, 122, 129, 130, 131, 132, 136])
+    #plotTracking3D(150)                 # simple
+    #plotTracking3D(162)                 # more curvature variation
+    # plotSpeedStudy([119, 120, 121, 122, 129, 130, 131, 132], labels=OLD_LABELS)
+    # plotErrorBudget([119, 120, 121, 122, 129, 130, 131, 132, 136])
     #plotErrorVsBend([136, 137])
-    #plotStepReturn(test=138)
+    plotStepReturn(test=148)
     #plotSpeedSweep(tests=range(91,102,1))
     #plotTrackingError(test=101)

@@ -9,7 +9,7 @@ CALCULATED_GLOB_FILE = "CalculatedTipPosition.txt"
 CURRENT_GLOB_FILE = "CurrentTipPosition.txt"
 CYL_FILE = "CylinderParams.txt"     # PCC arc parameters [k1, r1, s1, k2, r2, s2]
 LIMITS_FILE = "LimitsHit.txt"       # PCC limit clamps [s1, s2, bend1, bend2] as 0/1
-META_FILE = "TestInfo.txt"          # run settings (trajectory, speed, ...), written once
+META_FILE = "TestInfo.txt"          # run settings (trajectory, speed, ...), written at the start (+ pack-up start at the end)
 
 ## FOLDERS
 
@@ -89,12 +89,14 @@ def writeLimits(flags: list[int], timestamp: float):
         vals = ", ".join(f"{int(p)}" for p in flags)
         f.write(f"t={timestamp:.3f}s  [{vals}]\n")
 
-def writeMeta(info: dict):
+def writeMeta(info: dict, append: bool = False):
     ''' Settings that are fixed for the whole run (trajectory, speed, ...),
         written once per test as "key = value" lines. Adds to the per-timestep
-        logs from writeAll, doesn't replace them.'''
+        logs from writeAll, doesn't replace them. append=True adds lines to
+        the existing file instead (e.g. the pack-up start time, only known at
+        the end of the run).'''
     filepath = _path(META_FILE)
-    with open(filepath, "w") as f:
+    with open(filepath, "a" if append else "w") as f:
         for key, value in info.items():
             f.write(f"{key} = {value}\n")
 

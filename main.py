@@ -37,18 +37,23 @@ Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else 
 PD_test_mode = "sine"           # ramp or sine
 
 ## MOVEMENT TIMINGS ##
-setupTime   = 2 # Time expected to move into initial position
+setupTime   = 2 # Time expected to move into initial position (logged, t = -2 -> 0)
+setupHoldTime = 0.2 # Held at the start of setupTime (motors at zero) and at its end (at the t = 0 motor positions)
 
 timeStep = 0.04
 freq = 1/timeStep
 
 packupTime  = 2 # Time expected to move back to starting position
+packupHoldTime = 2 # Time held at zero after the pack-up ramp, before disabling (logged)
 
-## STEP-RETURN TEST (trajectory 9) 
+## STEP-RETURN TESTS (trajectory 9 = C-shape, 10 = S-shape)
 # Bend out to each (direction, bend) pair, come back to straight and hold, to
-# measure how far the robot fails to return (hysteresis / tendon slack).
-SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad)
-SR_BENDS    = [PI/6, PI/3]                          # total bend angles, 30 & 60 deg
+# measure how far the robot fails to return (hysteresis / tendon slack), and to
+# give the Poly fit a spread of shapes. Each section takes half the bend:
+# C-shape - both sections bend the same way (one arc, tool tilts with the bend)
+# S-shape - section 2 bends back by the same amount, tool stays vertical (as in traj 4, 7, 8)
+SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad), same 8 as Tests 138-159
+SR_BENDS    = [PI/18, PI/6, PI/3, PI/2]             # total bend |theta1|+|theta2|: 10, 30, 60, 90 deg
 SR_RAMP     = 2                                     # s, ramp out and ramp back each
 SR_HOLD     = 2                                     # s, hold bent
 SR_REST     = 3                                     # s, hold straight - residual measured here
@@ -62,7 +67,7 @@ if trajectory == 3:
     taskTime = 1000
 elif trajectory == 5:
     taskTime = 100
-elif trajectory == 9:
+elif trajectory in (9, 10):
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
@@ -82,7 +87,8 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
     5 - Butterfly\n
     7 - Figure 8\n
     8 - 3D Helix\n
-    9 - Step-return (hysteresis test)'''
+    9 - Step-return, C-shape (hysteresis test)\n
+    10 - Step-return, S-shape'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
             x   , y   , z   = 150, 30*S(const_1*t_now), 220 + 30*C(const_1*t_now)
@@ -148,9 +154,9 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
-        case 9: # Step-return - see stepReturnSchedule()
+        case 9 | 10: # Step-return, C-shape (9) or S-shape (10) - see stepReturnSchedule()
             phi, bend, _, _ = stepReturnSchedule(t_now)
-            x, y, z, Rx, Ry, Rz = stepReturnPose(phi, bend)
+            x, y, z, Rx, Ry, Rz = stepReturnPose(phi, bend, "C" if _trajectory == 9 else "S")
             dx,dy,dz,dRx,dRy,dRz = [0]*6
         case _:
             x   = y     = z     = 0
@@ -184,9 +190,20 @@ def stepReturnSchedule(t_now: float) -> tuple[float, float, str, int]:
         return phi, bend*(1 + C(PI*tc/SR_RAMP))/2, "back", i
     return phi, 0.0, "rest", i
 
-def stepReturnPose(phi: float, bend: float) -> list[float]:
-    ''' Tool pose for the whole bending length as one constant-curvature arc,
-        bent by `bend` rad in direction `phi`.'''
+def stepReturnPose(phi: float, bend: float, shape: str = "C") -> list[float]:
+    ''' Tool pose for a total bend of `bend` rad in direction `phi`, each
+        section taking half of it.\n
+        "C" - one constant-curvature arc over the whole bending length.\n
+        "S" - section 2 bends back by the same amount as section 1: the shape is
+        point-symmetric about the joint, so the tip sits at twice the joint's
+        position and the tool comes back to vertical.'''
+    if shape == "S":
+        if bend < 1e-9:
+            return [0.0, 0.0, SR_BEND_L + SR_TOOL_L, 0.0, 0.0, 0.0]
+        R = SR_BEND_L/bend                                    # radius of each section's arc
+        r_xy = 2*R*(1 - C(bend/2))
+        return [r_xy*C(phi), r_xy*S(phi), 2*R*S(bend/2) + SR_TOOL_L, 0.0, 0.0, 0.0]
+
     t = [S(bend)*C(phi), S(bend)*S(phi), C(bend)]            # tool axis
     if bend < 1e-9:
         p = [0.0, 0.0, SR_BEND_L]
@@ -215,8 +232,11 @@ def PD_TEST(t_now: float, tMode)-> tuple[list[float], list[float]]:
             _targEgoPos, _targEgoVel = [A * S(t_now * f)]*6, [A*(f)*C(t_now * f)]*6
             return _targEgoPos, _targEgoVel
 
-def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker): 
-    '''Move Motors to positions that correlate to a given trajectory at when t = 0
+def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
+    '''Move Motors to positions that correlate to a given trajectory at when t = 0:
+       hold straight (motors at zero) for setupHoldTime, ramp linearly to the motor
+       positions for t = 0, then hold there for setupHoldTime before the trajectory
+       starts. All logged, t = -2 -> 0.
        Returns 0 on fail, 1 on success'''
     
 
@@ -233,17 +253,21 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
     else:
         return False
     prevGlobPos = [0]*6
+    nSetup = round(setupTime/timeStep)
+    nHold = round(setupHoldTime/timeStep)
+    nRamp = nSetup - 2*nHold
     t_glob = time.monotonic()
-    
-    for i in range(round(setupTime/timeStep)):
+
+    for i in range(nSetup):
         t_init_start = time.monotonic() # Start RealTime Process
 
-        if i < 0.9*round(setupTime/timeStep): # Linearly reach starting position within 90% of the starting time
-            initEgoPos = [ x * (i/(0.9*freq*setupTime)) for x in targEgoPos]
-            
-        else:
-            initEgoPos = targEgoPos
-            targEgoVel = [0]*6
+        if i < nHold:               # Hold straight (motors at zero)
+            initEgoPos, initEgoVel = [0.0]*6, [0.0]*6
+        elif i < nHold + nRamp:     # Ramp linearly to the motor positions for t = 0, reaching them on the last ramp step
+            initEgoPos = [x * (i - nHold + 1)/nRamp for x in targEgoPos]
+            initEgoVel = targEgoVel
+        else:                       # Hold at the motor positions for t = 0 until the trajectory starts
+            initEgoPos, initEgoVel = targEgoPos, [0.0]*6
 
         # Data Collection for Logging
         currEgoPos = stm.get_state()
@@ -261,7 +285,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
         if mode == "PCC":
             W.writeCyl(Robot.targCylPos, t_now)
             W.writeLimits(Robot.limitFlags, t_now)
-        stm.set_targets(initEgoPos, targEgoVel)
+        stm.set_targets(initEgoPos, initEgoVel)
 
         t_init_end = time.monotonic()
         timeTaken = t_init_end - t_init_start
@@ -280,6 +304,7 @@ def main():
         ##  INITIALISATION  ##
         W.controlType = moveMode
         motors_enabled = False
+        taskFinished = False    # pack-up is only logged after a task that ran to its end
         print("Waiting for camera pose lock...\n")
         stm     = STM32Comm(port=PORT, baud=BAUD, timeout=0.2)
         
@@ -305,7 +330,9 @@ def main():
         
         W.writeMeta({"moveMode": moveMode, "trajectory": trajectory, "taskTime": taskTime,
                      "movementfreq": globals().get("movementfreq", "n/a"),
-                     "timeStep": timeStep, "smoothing": SMOOTHING})
+                     "timeStep": timeStep, "smoothing": SMOOTHING,
+                     "setupTime": setupTime, "setupHoldTime": setupHoldTime,
+                     "packupTime": packupTime, "packupHoldTime": packupHoldTime})
         t_offset, startStatus = CTRL_INIT(moveMode, trajectory, stm, tracker)
         if not startStatus:
             print("Something is wrong!\n")
@@ -369,15 +396,47 @@ def main():
             else:
                 #print(f"Went overtime at t_now = {t_now}s!")
                 overflowTracker += 1
+        taskFinished = True
 
     finally:
         print("Disabling motors and cleaning up.")
         print(f"Over the task, {overflowTracker} loops went overTime.")
         if currEgoPos is not None and motors_enabled:
             endPoint = currEgoPos
-            for t in range(round(packupTime*freq)):
-                stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
-                time.sleep(1/freq)
+            logPackup = taskFinished    # an aborted run packs up exactly as before, unlogged
+            straightPose = [0.0, 0.0, 2*Robot.sectL + Robot.toolLength, 0.0, 0.0, 0.0] if Robot is not None else [0.0]*6
+            # Ramp linearly to zero over packupTime, then hold at zero for packupHoldTime
+            for i in range(round(packupTime*freq) + round(packupHoldTime*freq)):
+                t_pack_start = time.monotonic()
+                packEgoPos = [pos * max(0.0, 1 - i/(freq * packupTime)) for pos in endPoint]
+                stm.set_targets(packEgoPos, [0] * 6)
+
+                ## DOCUMENT - the ramp back to straight and the hold at zero after it, on
+                ## the task's clock, with the straight pose as desired (like CTRL_INIT
+                ## logs its destination). A logging error only stops the logging,
+                ## never the pack-up.
+                if logPackup:
+                    try:
+                        t_log = t_pack_start - t_start + t_offset
+                        if i == 0:
+                            W.writeMeta({"packupStart": round(t_log, 3)}, append=True)   # analyse.loadTest leaves out rows from here on
+                        state = stm.get_state()
+                        if state is not None:
+                            currEgoPos = state
+                        cameraData = tracker.update()
+                        if Robot is not None and cameraData["position"] is not None:   # PD_test logs no tip, as in the task
+                            currGlobPos = list(cameraData["position"]) + [0]*3
+                        fileNumber = W.writeAll(packEgoPos, currEgoPos, straightPose, straightPose, currGlobPos, t_log)
+                        if moveMode == "PCC":
+                            W.writeCyl([0.0, 0.0, Robot.sectL, 0.0, 0.0, Robot.sectL], t_log)
+                            W.writeLimits([0, 0, 0, 0], t_log)
+                    except Exception as err:
+                        print(f"Stopped logging the pack-up: {err}\n")
+                        logPackup = False
+
+                t_loop = time.monotonic() - t_pack_start
+                if t_loop <= timeStep:
+                    time.sleep(timeStep-t_loop)
         tracker.stop()
         stm.disable()
         stm.close()   
