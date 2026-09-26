@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 9                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 4                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -114,7 +114,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             dRx= dRy= dRz =0
 
         case 4: # Full Circle - centred, untilted; complements case 0's off-axis tilted loop
-            x, y, z = 120*C(const_1*t_now), 120*S(const_1*t_now), 270
+            x, y, z = 120*C(const_1*t_now), 120*S(const_1*t_now), 250
             Rx, Ry, Rz = 0, 0, 0
             dx, dy, dz = 0, 0, 0
             dRx, dRy, dRz = 0, 0, 0
