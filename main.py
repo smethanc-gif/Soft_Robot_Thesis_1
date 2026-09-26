@@ -32,7 +32,7 @@ fileNumber = 55 # Filler so graphing doesn't fail
 ## CTRL PROPERTIES ##
 moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
-trajectory  = 4                                         # See MOVEMENT_FUNCTIONS()
+trajectory  = 5                                         # See MOVEMENT_FUNCTIONS()
 Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
 PD_test_mode = "sine"           # ramp or sine
 
@@ -53,7 +53,7 @@ packupHoldTime = 2 # Time held at zero after the pack-up ramp, before disabling 
 # C-shape - both sections bend the same way (one arc, tool tilts with the bend)
 # S-shape - section 2 bends back by the same amount, tool stays vertical (as in traj 4, 7, 8)
 SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad), same 8 as Tests 138-159
-SR_BENDS    = [PI/18, PI/6, PI/3, PI/2]             # total bend |theta1|+|theta2|: 10, 30, 60, 90 deg
+SR_BENDS    = [PI/18, PI/6, PI/3, PI/2, 3*PI/2]             # total bend |theta1|+|theta2|: 10, 30, 60, 90 deg
 SR_RAMP     = 2                                     # s, ramp out and ramp back each
 SR_HOLD     = 2                                     # s, hold bent
 SR_REST     = 3                                     # s, hold straight - residual measured here
@@ -70,8 +70,8 @@ elif trajectory == 5:
 elif trajectory in (9, 10):
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
-    taskTime    = 30
-    movementfreq = 2 # Amount of Repetitions of movement in the taskTime
+    taskTime    = 60
+    movementfreq = 1 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
@@ -126,7 +126,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
                 # tying it to movementfreq wouldn't make sense here.
             theta = t_now * (24*PI/taskTime)
             rad = math.exp(C(theta)) - 2*C(4*theta) + S(theta/12)**5
-            x, y, z = 24*rad*C(theta), 24*rad*S(theta), 270
+            x, y, z = 24*rad*C(theta), 24*rad*S(theta), 250
             Rx, Ry, Rz = 0, 0, 0
             dx, dy, dz = 0, 0, 0
             dRx, dRy, dRz = 0, 0, 0
@@ -142,7 +142,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             a = 100
             x = a*C(const_1*t_now)/(1+(S(const_1*t_now))**2)
             y = a*S(const_1*t_now)*C(const_1*t_now)/(1+(S(const_1*t_now)**2))
-            z = 300
+            z = 260
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
@@ -150,7 +150,7 @@ def MOVEMENT_FUNCTIONS(t_now: float, _trajectory: int):
             radius = 90
             x = radius *C(const_1*t_now)
             y = radius *S(const_1*t_now)
-            z = 300 - 50*t_now/taskTime
+            z = 300 - 80*t_now/taskTime
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
