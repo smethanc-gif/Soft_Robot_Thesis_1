@@ -71,7 +71,7 @@ elif trajectory in (9, 10):
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
     taskTime    = 30
-    movementfreq = 6 # Amount of Repetitions of movement in the taskTime
+    movementfreq = 2 # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
