@@ -741,8 +741,8 @@ def plotErrorBudget(tests: list[int], ctrl: str = "PCC"):
 
 def main():
     # Run from the repo root (log paths are relative: PCC/Test_N/...)
-    tests = [139, 140, 141, 142, 144, 145, 146, 147, 149, 150, 151, 152, 153, 154, 155, 157, 158, 160, 161, 162, 163, 164, 165, 166, 167] # From test day 2
-    # trackingTable(tests)
+    tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
+    #trackingTable(tests)
     #plotSpeedStudy(tests)
     #plotErrorBudget(tests)
     # print("\n=== Error budget (RMSE mm after removing each cause) ===")
@@ -758,11 +758,11 @@ OLD_LABELS = {**{t: "V-spiral" for t in (119, 120, 121, 122)}, **{t: "Figure 8" 
 
 if __name__ == "__main__":
     main()
-    #plotTracking3D(150)                 # simple
+    plotTracking3D(194)                 # simple
     #plotTracking3D(162)                 # more curvature variation
     # plotSpeedStudy([119, 120, 121, 122, 129, 130, 131, 132], labels=OLD_LABELS)
     # plotErrorBudget([119, 120, 121, 122, 129, 130, 131, 132, 136])
     #plotErrorVsBend([136, 137])
-    plotStepReturn(test=148)
+    #plotStepReturn(test=203)
     #plotSpeedSweep(tests=range(91,102,1))
-    #plotTrackingError(test=101)
+    #plotTrackingError(test=212)

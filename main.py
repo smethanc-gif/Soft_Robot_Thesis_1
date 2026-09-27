@@ -53,7 +53,7 @@ packupHoldTime = 2 # Time held at zero after the pack-up ramp, before disabling 
 # C-shape - both sections bend the same way (one arc, tool tilts with the bend)
 # S-shape - section 2 bends back by the same amount, tool stays vertical (as in traj 4, 7, 8)
 SR_DIRS     = [i*PI/4 for i in range(8)]            # bend directions (rad), same 8 as Tests 138-159
-SR_BENDS    = [PI/18, PI/6, PI/3, PI/2, 3*PI/2]             # total bend |theta1|+|theta2|: 10, 30, 60, 90 deg
+SR_BENDS    = [PI/18, PI/6, PI/3, PI/2, 3*PI/4]             # total bend |theta1|+|theta2|: 10, 30, 60, 90 deg
 SR_RAMP     = 2                                     # s, ramp out and ramp back each
 SR_HOLD     = 2                                     # s, hold bent
 SR_REST     = 3                                     # s, hold straight - residual measured here
