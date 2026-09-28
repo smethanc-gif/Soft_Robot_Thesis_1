@@ -13,6 +13,7 @@ from Core import trajectories
 from Core.trajectories import calcTargGlob, calcPDTestEgo
 from Results.dataLogger import DataLogger
 from camera_feedback.robotTracker import TipTracker, SMOOTHING
+#from Results.analysis import analyse as A
 
 # ---- Comms ----
 PORT    = "/dev/ttyS0"

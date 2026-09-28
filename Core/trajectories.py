@@ -105,7 +105,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
             a = 100
             x = a*cos(angularSpeed*_tNow)/(1+(sin(angularSpeed*_tNow))**2)
             y = a*sin(angularSpeed*_tNow)*cos(angularSpeed*_tNow)/(1+(sin(angularSpeed*_tNow)**2))
-            z = 260
+            z = 280
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
@@ -113,7 +113,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
             radius = 90
             x = radius *cos(angularSpeed*_tNow)
             y = radius *sin(angularSpeed*_tNow)
-            z = 300 - 80*_tNow/taskTime
+            z = 300 - 50*_tNow/taskTime
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 

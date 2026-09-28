@@ -1,6 +1,6 @@
 {
-    "moveMode": "PCC",
-    "trajectory": 9,
+    "moveMode": "PCC_Cable",
+    "trajectory": 8,
     "pdTestMode": "sine",
     "timeStep": 0.04,
     "taskTime": 30,

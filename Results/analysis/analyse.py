@@ -682,13 +682,17 @@ def plotErrorBudget(_tests: list[int], _ctrl: str = "PCC"):
 
 def main():
     '''Tables / plots for the latest test day - uncomment what's needed.'''
-    exampleTest = 221
+    exampleTest = 223
     #tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
     #plotStepReturn(exampleTest)
-    plotTracking3D(exampleTest)
+    #plotTracking3D(_test=228,_ctrl="PCC")
+    #plotTracking3D(_test=10,_ctrl="PCC_Cable")
+    #plotTracking3D(_test=8,_ctrl="Poly")
+    plotTracking3D(_test=6,_ctrl="Poly")
+    plotTracking3D(_test=10,_ctrl="Poly")
     #printTrackingTable(tests)
     #plotSpeedStudy(tests)
-    #plotErrorBudget(tests)
+    #printTrackingTable(_ctrl="PCC_Cable", _tests=[1,2,3,5,6,8])
     # print("\n=== Error budget (RMSE mm after removing each cause) ===")
     # for t in tests:
     #     calcErrorBudget(t)
