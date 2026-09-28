@@ -1,5 +1,5 @@
 {
-  "model": "fitted to measured motors -> camera tip (results/polyFit.py)",
+  "model": "fitted to measured motors -> camera tip (Results/calibration/polyFit.py)",
   "lag_samples": 3,
   "n_sub": 8,
   "train_tests": {

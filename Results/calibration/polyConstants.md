@@ -1,10 +1,10 @@
 # How the Poly model constants were derived
 
-This explains how the constants in `PCC_control/poly_constants.json` were found, why each modelling choice was made, how well the result predicts the robot, and how the constants are used by the three control methods compared in the thesis: PCC, cable-compensated PCC and Poly. Everything here can be rerun with:
+This explains how the constants in `Core/Poly/polyConstants.json` were found, why each modelling choice was made, how well the result predicts the robot, and how the constants are used by the three control methods compared in the thesis: PCC, cable-compensated PCC and Poly. Everything here can be rerun with:
 
 ```bash
-python results/polyFit.py        # fits the constants, prints every table below, saves the JSON
-python results/polyFigures.py    # redraws the figures in results/figures/
+python Results/calibration/polyFit.py        # fits the constants, prints every table below, saves the JSON
+python Results/calibration/polyFigures.py    # redraws the figures in Results/calibration/figures/
 ```
 
 ## Summary
@@ -16,7 +16,7 @@ python results/polyFigures.py    # redraws the figures in results/figures/
 - **Cable compensation is its own control method (`PCC_Cable`),** so the thesis can separate calibrating the cables from changing the curvature model (section 10).
 - **The calibrated methods need smaller trajectories than today's** to stay inside the motor range the model was fitted on (section 11).
 
-| Model | Constants | Validation runs (`movementfreq` 4) | Figure 8s never seen in training |
+| Model | Constants | Validation runs (`movementFreq` 4) | Figure 8s never seen in training |
 |---|---|---|---|
 | PCC (as used in testing) | 0 | 40.9 mm | 29.9 mm |
 | PCC + independent cable gains | 7 | 13.8 mm | 12.7 mm |
@@ -50,7 +50,7 @@ Only tests run **after the E/F pulley fix** were used; earlier ones had the cabl
 | Set | Tests | Purpose |
 |---|---|---|
 | Training | step-returns 191, 203 (C-shape), 204 (S-shape); circles 192, 193, 195, 196, 197, 199; figure 8s 201, 202, 205, 206, 209; helices 211, 212, 214, 215, 216 | fit the constants |
-| Validation | all `movementfreq` 4 runs: circles 194, 198; figure 8 208; helices 213, 217 | score runs the fit never saw |
+| Validation | all `movementFreq` 4 runs: circles 194, 198; figure 8 208; helices 213, 217 | score runs the fit never saw |
 | Unseen-path check | refit with **no figure 8s at all**, then predict all six figure 8s | score a path shape the fit never saw |
 
 The step-returns are ~7000 samples each, so only every third sample is used to stop them swamping the trajectory tests (~17,800 training samples in total).
@@ -72,7 +72,7 @@ This step has no fitted constants. It is PCC's own geometry run backwards.
 
 ## 4. First attempt: Poly curvature on its own
 
-The Poly model lets curvature vary along each section: `kx(σ) = a0 + a1·σ`, `ky(σ) = b0 + b1·σ` with σ running 0 → 1 along the section, as in `poly.py`. In the fit, each section's curvature is built from the bends found in step 3:
+The Poly model lets curvature vary along each section: `kx(σ) = a0 + a1·σ`, `ky(σ) = b0 + b1·σ` with σ running 0 → 1 along the section, as in `Core/Poly/polyModel.py`. In the fit, each section's curvature is built from the bends found in step 3:
 
 ```
 section j curvature(σ) = [ gain_j · v_j + coupling_j · v_other            ← overall bend of the section
@@ -222,7 +222,7 @@ All values are tip prediction RMSE in mm.
 
 ## 8. The final constants and what they mean
 
-Stored in `PCC_control/poly_constants.json`. The Poly terms act on the cable-gain-corrected bends, so "1" means "as calibrated PCC predicts".
+Stored in `Core/Poly/polyConstants.json`. The Poly terms act on the cable-gain-corrected bends, so "1" means "as calibrated PCC predicts".
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -250,9 +250,9 @@ All three use the same PCC shape solve (`midpointCalc`, the s1/s2 coupling and t
 
 | Method (`moveMode`) | Where | Motor commands |
 |---|---|---|
-| `PCC` | `PCC_control/constantCurve.py` | PCC's cable geometry, unchanged |
-| `PCC_Cable` | `PCC_control/cableComp.py` | PCC's target shape, with each motor angle divided by its cable gain (and the length gain applied), so the robot actually takes the shape PCC intends |
-| `Poly` | `PCC_control/poly.py` | starts from the `PCC_Cable` commands, then applies the smallest motor correction that puts the fitted Poly model's tip on the target |
+| `PCC` | `Core/PCC/constantCurvature.py` | PCC's cable geometry, unchanged |
+| `PCC_Cable` | `Core/PCC_Cable/cableCompensation.py` | PCC's target shape, with each motor angle divided by its cable gain (and the length gain applied), so the robot actually takes the shape PCC intends |
+| `Poly` | `Core/Poly/polyCurvature.py` | starts from the `PCC_Cable` commands, then applies the smallest motor correction that puts the fitted Poly model's tip on the target |
 
 **How the Poly IK works, each 40 ms step:**
 
@@ -261,13 +261,13 @@ All three use the same PCC shape solve (`midpointCalc`, the s1/s2 coupling and t
 3. Warm-start from the previous step's correction. The solve usually takes 0–2 iterations.
 4. Safety: the correction is capped at 3 rad per motor and can change by at most 0.25 rad per step (6 rad/s), so the commands can never jump. All commands are clamped to ±15 rad, below the STM32's 20 rad trip.
 
-The shared model code is in `PCC_control/polyModel.py`, which both the controllers and `results/polyFit.py` use. So the robot runs exactly the model that was fitted.
+The shared model code is in `Core/Poly/polyModel.py`, which both the controllers and `Results/calibration/polyFit.py` use. So the robot runs exactly the model that was fitted.
 
-`main.py` accepts `moveMode = "PCC"`, `"PCC_Cable"` or `"Poly"`. Each saves into its own results folder (`PCC/`, `PCC_Cable/`, `Poly/`), and the arc parameters and limit flags are logged for all three.
+`moveMode` in `Core/controlSettings.json` accepts `"PCC"`, `"PCC_Cable"` or `"Poly"`. Each saves into its own results folder (`Results/data/PCC/`, `PCC_Cable/`, `Poly/`), and the arc parameters and limit flags are logged for all three.
 
 ## 11. Offline checks before robot testing
 
-`results/checkIK.py` replays trajectories through all three controllers exactly as `main.py` calls them. For each method's motor commands it reports where the fitted model puts the tip, the motor range and speed, and the IK time.
+`Core/testing/checkIK.py` replays trajectories through all three controllers exactly as `main.py` calls them. For each method's motor commands it reports where the fitted model puts the tip, the motor range and speed, and the IK time.
 
 **Finding: today's trajectories are too big for the calibrated methods.** PCC only got through the z = 250 circle, the z = 260 figure 8 and the helices down to 220–230 with motor angles up to ~9 rad because it never reached the targets. Reaching them properly takes about 1.5–1.9× more cable pull:
 
@@ -279,7 +279,7 @@ The shared model code is in `PCC_control/polyModel.py`, which both the controlle
 
 That's beyond the 8.5–9.2 rad range the model was fitted on, and close to where motor F let go in tests 182 and 207. At these settings the Poly correction also runs into its 3 rad cap. This isn't the solver failing (it converges without failures or jumps). The model is being asked about bends and compressions it has never seen, and its bend-size term extrapolates into asking for ever more pull.
 
-**Recommended comparison set.** Every method stays inside the tested motor range here, and the Poly solve converges with no limits hit at both `movementfreq` 2 and 6. These are the tip errors the fitted model predicts for each method's commands:
+**Recommended comparison set.** Every method stays inside the tested motor range here, and the Poly solve converges with no limits hit at both `movementFreq` 2 and 6. These are the tip errors the fitted model predicts for each method's commands:
 
 | Trajectory | PCC | PCC_Cable | Poly | Poly max motor | Poly solve time (this PC) |
 |---|---|---|---|---|---|
@@ -291,25 +291,25 @@ Poly's near-zero only shows its solve converges; it is scored by its own model. 
 
 The step-returns (C and S shapes, up to 90°) also stay in range for all three. Poly's solve converges to within 0.1 mm there.
 
-**Timing.** On this PC the Poly solve adds ~2–6 ms on average to PCC's ~1 ms shape solve. The Pi is slower, so run `python results/checkIK.py` on the Pi before testing. It needs only numpy and the logs, and it prints the same timing columns. Everything should stay well inside the 40 ms loop.
+**Timing.** On this PC the Poly solve adds ~2–6 ms on average to PCC's ~1 ms shape solve. The Pi is slower, so run `python Core/testing/checkIK.py` on the Pi before testing. It needs only numpy and the logs, and it prints the same timing columns. Everything should stay well inside the 40 ms loop.
 
 ## 12. Next steps
 
-1. Run `results/checkIK.py` on the Pi to confirm timing.
+1. Run `Core/testing/checkIK.py` on the Pi to confirm timing.
 2. Set the trajectories to the recommended comparison set, and run a PCC baseline at those exact settings (the existing PCC data was at bigger settings).
 3. Run the same set with `moveMode = "PCC_Cable"` and `"Poly"`. Start each session with a step-return, and watch motor F.
-4. Compare the three with the existing analysis tools (`trackingTable`, `plotSpeedStudy`, `errorBudget`, `plotTracking3D`), using `ctrl = "PCC_Cable"` / `"Poly"` for their folders.
+4. Compare the three with the existing analysis tools (`printTrackingTable`, `plotSpeedStudy`, `calcErrorBudget`, `plotTracking3D` in `Results/analysis/analyse.py`), using `_ctrl="PCC_Cable"` / `"Poly"` for their folders.
 5. If bigger trajectories are needed later, first collect step-returns with bigger bends at lower heights (carefully), refit with `polyFit.py`, and re-run `checkIK.py`.
 
 ## Where things are in the code
 
 | What | Where |
 |---|---|
-| Shared model: motors ↔ section shapes, Poly shape and tip | `PCC_control/polyModel.py` |
-| The three controllers | `PCC_control/constantCurve.py`, `cableComp.py`, `poly.py` (selected in `CTRL.py`) |
-| Fitting script (sections 1–8) | `results/polyFit.py` |
-| Stage 1: cable gains / stage 2: Poly terms, shape held | `polyFit.fitTendonGains`, `polyFit.fit(..., shapeWeight=SHAPE_WEIGHT)` |
+| Shared model: motors ↔ section shapes, Poly shape and tip | `Core/Poly/polyModel.py` |
+| The three controllers | `Core/PCC/constantCurvature.py`, `Core/PCC_Cable/cableCompensation.py`, `Core/Poly/polyCurvature.py` (selected in `Core/continuumRobot.py`) |
+| Fitting script (sections 1–8) | `Results/calibration/polyFit.py` |
+| Stage 1: cable gains / stage 2: Poly terms, shape held | `polyFit.fitTendonGains`, `polyFit.fitPolyTerms(..., _shapeWeight=SHAPE_WEIGHT)` |
 | Training / validation split, settings | `TRAIN`, `VALID`, `POLY_VARIANT`, `SHAPE_WEIGHT` at the top of `polyFit.py` |
-| Fitted constants | `PCC_control/poly_constants.json` |
-| Offline controller checks (section 11) | `results/checkIK.py` |
-| Figures | `results/polyFigures.py` → `results/figures/` |
+| Fitted constants | `Core/Poly/polyConstants.json` |
+| Offline controller checks (section 11) | `Core/testing/checkIK.py` |
+| Figures | `Results/calibration/polyFigures.py` → `Results/calibration/figures/` |
