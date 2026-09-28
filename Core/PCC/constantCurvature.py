@@ -8,6 +8,7 @@ import math
 from math import pi as PI
 import time
 import numpy as np
+from Core.settings import loadRobotGeometry
 
 
 class ConstantCurvature:
@@ -16,23 +17,24 @@ class ConstantCurvature:
         Geometric Descriptions\n
         Control Offsets\n
         Physical Limits\n'''
+        geometry = loadRobotGeometry()          # Core/robotGeometry.json - units and meanings in its "notes"
 # GEOMETRIC DESCRIPTION
-
-        self.nodes              = 14
-        self.sections           = 2
-        self.robotRadius        = 15.25 # mm
-        self.sectL              = 148.5 #mm
+        self.nodes              = geometry["nodes"]
+        self.sections           = geometry["sections"]
+        self.robotRadius        = geometry["robotRadius"]
+        self.sectL              = geometry["sectL"]
         self.initCableLen       = np.array([self.sectL*2, self.sectL] * 3)
-        self.motorShaftDiameter = 10
-        self.spoolRadius        = self.motorShaftDiameter/2    # mm of cable per rad of shaft
-        self.toolLength         = 30 # mm
+        self.spoolRadius        = geometry["spoolRadius"]
+        self.toolLength         = geometry["toolLength"]
 # CONTROL OFFSETS
-        self.rotationalOffset   = 2.8623 # radians
+        self.rotationalOffset   = geometry["rotationalOffset"]
+        self.tendonAngles1      = np.radians(geometry["tendonAnglesDeg"]["section1"])
+        self.tendonAngles2      = np.radians(geometry["tendonAnglesDeg"]["section2"])
 
 # PHYSICAL LIMITS
-        self.sMin               = 0.8*self.sectL          # section arc length range (mm)
+        self.sMin               = geometry["sMinRatio"]*self.sectL
         self.sMax               = self.sectL
-        self.thetaMax           = PI/2                # max bend angle k*s per section
+        self.thetaMax           = math.radians(geometry["thetaMaxDeg"])
         self.limitsHit          = []                 # which limits clamped on the last solve
         self.limitFlags         = [0, 0, 0, 0]       # same, as 0/1 for logging: [s1, s2, bend1, bend2]
 
@@ -286,8 +288,8 @@ class ConstantCurvature:
         n1calc = 2*n1*math.sin(s1*k1/(2*n1))    # Calculations for future use
         n2calc = 2*n2*math.sin(s2*k2/(2*n2))
 
-        offsets1 = np.array([0, PI/3, 2*PI/3, PI, -2*PI/3, -PI/3])
-        offsets2 = np.array([0, 2*PI/3, -2*PI/3])          # only 3 cables run through section 2
+        offsets1 = self.tendonAngles1
+        offsets2 = self.tendonAngles2                     # only 3 cables run through section 2
 
         l1 = np.full(6, s1) if k1 == 0 else n1calc*(1/k1 - d*np.sin(r1 + OFS + offsets1))
         l2 = np.full(3, s2) if k2 == 0 else n2calc*(1/k2 - d*np.sin(r2 + OFS + offsets2))

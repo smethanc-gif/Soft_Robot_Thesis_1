@@ -10,6 +10,7 @@ from math import pi as PI
 import numpy as np
 from STM32_comms.piComm import STM32Comm
 from Core.continuumRobot import ContinuumRobot
+from Core.settings import loadControlSettings, loadRobotGeometry
 from Results import dataLogger as W
 from camera_feedback.robotTracker import TipTracker, SMOOTHING
 from controller.ctrlInput import Controller as INPUT
@@ -19,33 +20,28 @@ import Results.analysis.graphing as G
 PORT    = "/dev/ttyS0"
 BAUD    = 115200
 
-## DATALOGGING ##
-DESIRED_EGO_FILE        = "DesiredMotorPosition.txt"
-CURRENT_EGO_FILE        = "CurrentMotorPosition.txt"
-DESIRED_GLOB_FILE       = "DesiredTipPosition.txt"
-CALCULATED_GLOB_FILE    = "CalculatedTipPosition.txt"
-CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
-
+## SETTINGS ## - Core/controlSettings.json (what to run) and Core/robotGeometry.json (dimensions)
+CONTROL = loadControlSettings()
+GEOMETRY = loadRobotGeometry()
 
 fileNumber = 55 # Filler so graphing doesn't fail
 
 ## CTRL PROPERTIES ##
-moveMode    = "PCC"                                     # "PCC", "PCC_Cable", "Poly", "PD_test"  
-                                                        # DISCONNECT TENDONS FOR PD_test
-trajectory  = 5                                         # See MOVEMENT_FUNCTIONS()
+moveMode    = CONTROL["moveMode"]                       # "PCC", "PCC_Cable", "Poly", "PD_test" - DISCONNECT TENDONS FOR PD_test
+trajectory  = CONTROL["trajectory"]                     # See MOVEMENT_FUNCTIONS()
 MODEL_MODES = ("PCC", "PCC_Cable", "Poly")              # modes that run a kinematic model (see PCC_control/CTRL.py)
 Robot     = ContinuumRobot(method=moveMode) if moveMode in MODEL_MODES else None
-PD_test_mode = "sine"           # ramp or sine
+PD_test_mode = CONTROL["pdTestMode"]           # ramp or sine
 
 ## MOVEMENT TIMINGS ##
-setupTime   = 2 # Time expected to move into initial position (logged, t = -2 -> 0)
-setupHoldTime = 0.2 # Held at the start of setupTime (motors at zero) and at its end (at the t = 0 motor positions)
+setupTime   = CONTROL["setupTime"]      # Time expected to move into initial position (logged, t = -2 -> 0)
+setupHoldTime = CONTROL["setupHoldTime"] # Held at the start of setupTime (motors at zero) and at its end (at the t = 0 motor positions)
 
-timeStep = 0.04
+timeStep = CONTROL["timeStep"]
 freq = 1/timeStep
 
-packupTime  = 2 # Time expected to move back to starting position
-packupHoldTime = 2 # Time held at zero after the pack-up ramp, before disabling (logged)
+packupTime  = CONTROL["packupTime"]     # Time expected to move back to starting position
+packupHoldTime = CONTROL["packupHoldTime"] # Time held at zero after the pack-up ramp, before disabling
 
 ## STEP-RETURN TESTS (trajectory 9 = C-shape, 10 = S-shape)
 # Bend out to each (direction, bend) pair, come back to straight and hold, to
@@ -59,8 +55,8 @@ SR_RAMP     = 2                                     # s, ramp out and ramp back 
 SR_HOLD     = 2                                     # s, hold bent
 SR_REST     = 3                                     # s, hold straight - residual measured here
 SR_CYCLE    = 2*SR_RAMP + SR_HOLD + SR_REST
-SR_BEND_L   = 2*148.5                               # mm, both sections as one arc (sectL in constantCurve.py)
-SR_TOOL_L   = 30                                    # mm, toolLength in constantCurve.py
+SR_BEND_L   = 2*GEOMETRY["sectL"]                   # mm, both sections as one arc
+SR_TOOL_L   = GEOMETRY["toolLength"]                # mm
 
 ## COMMAND FUNCTIONS SETUP
 if trajectory == 3:
@@ -71,8 +67,8 @@ elif trajectory == 5:
 elif trajectory in (9, 10):
     taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
 else:
-    taskTime    = 60
-    movementfreq = 1 # Amount of Repetitions of movement in the taskTime
+    taskTime    = CONTROL["taskTime"]
+    movementfreq = CONTROL["movementFreq"] # Amount of Repetitions of movement in the taskTime
     const_1 = PI*2*movementfreq/taskTime
 
 if trajectory == 1:
@@ -360,7 +356,6 @@ def main():
             if cameraData["position"] is None:
                 print("Missed Camera Frame.\n")
                 currGlobPos = prevGlobPos
-                W._path(DESIRED_EGO_FILE)
             else:
                 currGlobPos = list(cameraData["position"]) + [0]*3
             
@@ -407,7 +402,7 @@ def main():
             for t in range(round(packupTime*freq)):
                 stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
                 time.sleep(timeStep)
-            for t in range(round(2*freq)):
+            for t in range(round(packupHoldTime*freq)):
                 stm.set_targets([0]*6, [0] * 6)
                 time.sleep(timeStep)
         tracker.stop()

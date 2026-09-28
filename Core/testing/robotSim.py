@@ -34,6 +34,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, so this file can be run directly
 from Core.continuumRobot import ContinuumRobot as control1
+from Core.settings import loadRobotGeometry
 from main import MOVEMENT_FUNCTIONS, setupTime, taskTime, packupTime, trajectory
 from controller.ctrlInput import Controller
 
@@ -41,7 +42,7 @@ from controller.ctrlInput import Controller
 NODES = 10
 SECTIONS = 2
 ROBOT_DIAMETER = 20   # mm
-SECT_LENGTH = 148.5   # mm - was 143, now matches ConstantCurvature's real sectL
+SECT_LENGTH = loadRobotGeometry()["sectL"]   # mm
 CHECK = False
 Robot = control1()
 t_start = time.monotonic()

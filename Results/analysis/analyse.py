@@ -9,9 +9,12 @@ from scipy.signal import correlate, correlation_lags
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))   # repo root, so this file can be run directly
 from Results.analysis.graphing import parse_log, DATA_ROOT, GlobErrorMetrics as trackingErrorMetrics, plotGlobError as plotTrackingError
 from Core.continuumRobot import ContinuumRobot
+from Core.settings import loadRobotGeometry, loadDataLogging
 
-HOME_Z = 327.0  # straight tool-tip height of the PCC model: 2*sectL + toolLength
-TOOL_L = 30.0   # toolLength in constantCurve.py
+GEOMETRY = loadRobotGeometry()
+FILES = loadDataLogging()["files"]
+TOOL_L = GEOMETRY["toolLength"]
+HOME_Z = 2*GEOMETRY["sectL"] + TOOL_L   # straight tool-tip height of the PCC model (327 mm)
 
 
 # ============================================================
@@ -27,17 +30,17 @@ def loadTest(test: int, ctrl: str = "PCC", packup: bool = False) -> dict:
         task.'''
     folder = f"{DATA_ROOT}/{ctrl}/Test_{test}"
     d = {}
-    for key, name in [("des", "DesiredTipPosition"), ("cal", "CalculatedTipPosition"),
-                      ("cur", "CurrentTipPosition"), ("dm", "DesiredMotorPosition"),
-                      ("cm", "CurrentMotorPosition"), ("cyl", "CylinderParams")]:
-        path = f"{folder}/{name}.txt"
+    for key, name in [("des", "desiredGlob"), ("cal", "calculatedGlob"),
+                      ("cur", "currentGlob"), ("dm", "desiredEgo"),
+                      ("cm", "currentEgo"), ("cyl", "configParams")]:
+        path = f"{folder}/{FILES[name]}"
         if os.path.exists(path):
             t, vals = parse_log(path)
             d[key] = numpy.array(vals).T
             if key == "des":
                 d["t"] = numpy.array(t)
-    if os.path.exists(f"{folder}/LimitsHit.txt"):
-        _, vals = parse_log(f"{folder}/LimitsHit.txt", ncols=4)
+    if os.path.exists(f"{folder}/{FILES['limitsHit']}"):
+        _, vals = parse_log(f"{folder}/{FILES['limitsHit']}", ncols=4)
         d["lim"] = numpy.array(vals).T
     n = min(len(v) for v in d.values())
     d = {k: v[:n] for k, v in d.items()}
@@ -325,8 +328,8 @@ def phaseLag(test: int, ctrl: str = "PCC", axis: int = 0, timeStep: float = 0.04
         DIFFERENT cycles instead of the true small shift - max_lag_s caps
         the search to lags that could plausibly be real control-loop lag
         (default 2s), not a fraction/multiple of the trajectory's period.'''
-    _, desiredPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/DesiredTipPosition.txt")
-    _, currentPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/CurrentTipPosition.txt")
+    _, desiredPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/{FILES['desiredGlob']}")
+    _, currentPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/{FILES['currentGlob']}")
     d = numpy.array(desiredPos[axis])
     c = numpy.array(currentPos[axis])
     n = min(len(d), len(c))
@@ -399,8 +402,8 @@ def sessionOffset(test: int, ctrl: str = "PCC", tail_fraction: float = 0.4) -> n
         fixed constant, it points at "initial configuration" (e.g.
         TipTracker's marker pose-lock, re-solved fresh each run) rather than
         a one-off coordinate bug or a fixed model error.'''
-    _, calcPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/CalculatedTipPosition.txt")
-    _, curPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/CurrentTipPosition.txt")
+    _, calcPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/{FILES['calculatedGlob']}")
+    _, curPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{test}/{FILES['currentGlob']}")
     calc = numpy.array(calcPos)[:3].T
     cur = numpy.array(curPos)[:3].T
     n = min(len(calc), len(cur))
@@ -424,9 +427,9 @@ def modelResidualVsBend(tests: list[int], ctrl: str = "PCC", tail_fraction: floa
     pooled_resid, pooled_bend = [], []
     per_test = {}
     for t in tests:
-        _, calcPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/CalculatedTipPosition.txt")
-        _, curPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/CurrentTipPosition.txt")
-        _, desPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/DesiredTipPosition.txt")
+        _, calcPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/{FILES['calculatedGlob']}")
+        _, curPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/{FILES['currentGlob']}")
+        _, desPos = parse_log(f"{DATA_ROOT}/{ctrl}/Test_{t}/{FILES['desiredGlob']}")
         calc = numpy.array(calcPos)[:3].T
         cur = numpy.array(curPos)[:3].T
         des = numpy.array(desPos)[:3].T
@@ -462,7 +465,7 @@ def modelResidualVsBend(tests: list[int], ctrl: str = "PCC", tail_fraction: floa
 def loadMeta(test: int, ctrl: str = "PCC") -> dict:
     ''' Run settings from TestInfo.txt (see fileWriting.writeMeta), numbers
         converted. {} for tests logged before TestInfo.txt existed.'''
-    path = f"{DATA_ROOT}/{ctrl}/Test_{test}/TestInfo.txt"
+    path = f"{DATA_ROOT}/{ctrl}/Test_{test}/{FILES['testInfo']}"
     meta = {}
     if not os.path.exists(path):
         return meta

@@ -17,6 +17,7 @@ import numpy as np
 
 from Core.PCC.constantCurvature import ConstantCurvature
 from Core.Poly import polyModel
+from Core.settings import loadRobotGeometry
 
 
 class CableCompensatedPCC(ConstantCurvature):
@@ -26,7 +27,7 @@ class CableCompensatedPCC(ConstantCurvature):
         self.tendonGains = C["gains"]                 # A..F: fraction of wound cable that reaches the robot
         self.modelParams = C["pcc"]                   # forward model used by forwardKinematics
         self.lengthGain = self.modelParams[-2]
-        self.motorLimit = 15.0                        # rad - clamp below the STM32's 20 rad safety trip
+        self.motorLimit = loadRobotGeometry()["motorLimit"]   # rad - clamp below the STM32's 20 rad safety trip
         self.clampCount = 0                           # how many commands have hit motorLimit
         self.targMotorPos = np.zeros(6)
 

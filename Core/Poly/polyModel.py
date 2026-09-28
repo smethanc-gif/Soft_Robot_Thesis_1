@@ -20,19 +20,20 @@ import os
 import json
 import numpy
 
-from Core.PCC.constantCurvature import ConstantCurvature
+from Core.settings import loadRobotGeometry
 
-# ---------------- robot constants (from constantCurve.py) ----------------
-_R = ConstantCurvature()
-D = _R.robotRadius
-SECT_L = _R.sectL
-SPOOL = _R.spoolRadius
-TOOL = _R.toolLength
-CABLE0 = numpy.array(_R.initCableLen)
+# ---------------- robot constants (Core/robotGeometry.json) ----------------
+_GEOMETRY = loadRobotGeometry()
+D = _GEOMETRY["robotRadius"]
+SECT_L = _GEOMETRY["sectL"]
+SPOOL = _GEOMETRY["spoolRadius"]
+TOOL = _GEOMETRY["toolLength"]
+CABLE0 = numpy.array([SECT_L*2, SECT_L]*3)
+ROTATIONAL_OFFSET = _GEOMETRY["rotationalOffset"]
 N_SUB = 8                               # sub-segments per section when integrating varying curvature
 
-_B1 = _R.rotationalOffset + numpy.radians([0, 60, 120, 180, -120, -60])   # section-1 tendon angles, A..F
-_B2 = _R.rotationalOffset + numpy.radians([0, 120, -120])                 # section-2 tendon angles, A, C, E
+_B1 = ROTATIONAL_OFFSET + numpy.radians(_GEOMETRY["tendonAnglesDeg"]["section1"])   # section-1 tendon angles, A..F
+_B2 = ROTATIONAL_OFFSET + numpy.radians(_GEOMETRY["tendonAnglesDeg"]["section2"])   # section-2 tendon angles, A, C, E
 _W1 = numpy.c_[numpy.sin(_B1), numpy.cos(_B1)]      # l1_i = s1 - D*(W1_i . v1)
 _W2 = numpy.c_[numpy.sin(_B2), numpy.cos(_B2)]
 _INV1 = numpy.linalg.inv(numpy.c_[numpy.ones(3), -D*_W1[[1, 3, 5]]])     # [s1, v1x, v1y] from l_B, l_D, l_F

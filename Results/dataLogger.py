@@ -1,17 +1,19 @@
 import os
 import re
+from Core.settings import loadDataLogging
 
-DATA_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")   # logs go in Results/data/<controlType>/Test_N
-## FILES
-
-DESIRED_EGO_FILE = "DesiredMotorPosition.txt"
-CURRENT_EGO_FILE = "CurrentMotorPosition.txt"
-DESIRED_GLOB_FILE = "DesiredTipPosition.txt"
-CALCULATED_GLOB_FILE = "CalculatedTipPosition.txt"
-CURRENT_GLOB_FILE = "CurrentTipPosition.txt"
-CYL_FILE = "CylinderParams.txt"     # PCC arc parameters [k1, r1, s1, k2, r2, s2]
-LIMITS_FILE = "LimitsHit.txt"       # PCC limit clamps [s1, s2, bend1, bend2] as 0/1
-META_FILE = "TestInfo.txt"          # run settings (trajectory, speed, ...), written at the start (+ pack-up start at the end)
+## FILES - Results/dataLogging.json
+LOGGING = loadDataLogging()
+DATA_ROOT = LOGGING["logRoot"]      # logs go in <logRoot>/<controlType>/Test_N
+FILES = LOGGING["files"]
+DESIRED_EGO_FILE = FILES["desiredEgo"]
+CURRENT_EGO_FILE = FILES["currentEgo"]
+DESIRED_GLOB_FILE = FILES["desiredGlob"]
+CALCULATED_GLOB_FILE = FILES["calculatedGlob"]
+CURRENT_GLOB_FILE = FILES["currentGlob"]
+CYL_FILE = FILES["configParams"]
+LIMITS_FILE = FILES["limitsHit"]
+META_FILE = FILES["testInfo"]
 
 ## FOLDERS
 
@@ -28,12 +30,12 @@ def _getRunFolder():
         testNums = []
         for name in os.listdir(os.path.join(DATA_ROOT, controlType)):
             if os.path.isdir(os.path.join(DATA_ROOT, controlType, name)):
-                m = re.fullmatch(r"Test_(\d+)", name)
+                m = re.fullmatch(re.escape(LOGGING["testFolderPrefix"]) + r"(\d+)", name)
                 if m:
                     testNums.append(int(m.group(1)))
         nextNum = max(testNums) + 1 if testNums else 1
         
-        _runFolder = os.path.join(DATA_ROOT, controlType, f"Test_{nextNum}")
+        _runFolder = os.path.join(DATA_ROOT, controlType, f"{LOGGING['testFolderPrefix']}{nextNum}")
         os.makedirs(_runFolder)
     return _runFolder, nextNum
 

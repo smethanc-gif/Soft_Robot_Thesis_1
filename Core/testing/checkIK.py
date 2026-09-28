@@ -25,6 +25,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, REPO)
 from Core.continuumRobot import ContinuumRobot
 from Core.Poly import polyModel
+from Core.settings import loadControlSettings, loadDataLogging
 from Results.analysis.graphing import parse_log
 
 TESTS = {196: "circle z250 mf2", 199: "circle z250 mf6", 206: "figure 8 z260 mf3", 209: "figure 8 z260 mf6",
@@ -34,11 +35,12 @@ TESTS = {196: "circle z250 mf2", 199: "circle z250 mf6", 206: "figure 8 z260 mf3
 COMPARISON_SET = {"circle r100 z280": ("circle", 100, 280, 280), "figure 8 a100 z300": ("figure 8", 100, 300, 300),
                   "helix r90 300->280": ("helix", 90, 300, 280)}
 METHODS = ("PCC", "PCC_Cable", "Poly")
-STEP_TIME = 0.04
+STEP_TIME = loadControlSettings()["timeStep"]
+LOGGING = loadDataLogging()
 
 
 def desiredPoses(test: int, ctrl: str = "PCC"):
-    t, vals = parse_log(os.path.join(REPO, "Results", "data", ctrl, f"Test_{test}", "DesiredTipPosition.txt"))
+    t, vals = parse_log(os.path.join(LOGGING["logRoot"], ctrl, f"Test_{test}", LOGGING["files"]["desiredGlob"]))
     t, poses = numpy.array(t), numpy.array(vals).T
     return t[t >= 0], poses[t >= 0]
 
@@ -64,7 +66,7 @@ def trainingRange():
     top = numpy.zeros(6)
     for tests in C["train_tests"].values():
         for t in tests:
-            tt, vals = parse_log(os.path.join(REPO, "Results", "data", "PCC", f"Test_{t}", "CurrentMotorPosition.txt"))
+            tt, vals = parse_log(os.path.join(LOGGING["logRoot"], "PCC", f"Test_{t}", LOGGING["files"]["currentEgo"]))
             q = numpy.array(vals).T[numpy.array(tt) >= 0]
             top = numpy.maximum(top, numpy.abs(q).max(axis=0))
     return top

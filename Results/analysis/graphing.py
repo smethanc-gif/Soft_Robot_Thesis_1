@@ -21,7 +21,9 @@ from mpl_toolkits.mplot3d import Axes3D
 _DESIRED_FILE = "PCC/Test_46/DesiredMotorPosition.txt"#"DesiredPosition.txt"
 _CURRENTFILE = "PCC/Test_46/CurrentMotorPosition.txt"#"CurrentPosition.txt"
 
-DATA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")   # Results/data
+from Core.settings import loadDataLogging
+
+DATA_ROOT = loadDataLogging()["logRoot"]   # Results/data
 LINE_PATTERN = re.compile(r"t=(-?[\d.]+)s\s+\[([^\]]+)\]")
 
 

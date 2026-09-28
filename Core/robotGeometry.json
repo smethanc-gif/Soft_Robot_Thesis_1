@@ -1,0 +1,29 @@
+{
+    "sections": 2,
+    "nodes": 14,
+    "robotRadius": 15.25,
+    "sectL": 148.5,
+    "spoolRadius": 5.0,
+    "toolLength": 30.0,
+    "rotationalOffset": 2.8623,
+    "tendonAnglesDeg": {
+        "section1": [0, 60, 120, 180, -120, -60],
+        "section2": [0, 120, -120]
+    },
+    "sMinRatio": 0.8,
+    "thetaMaxDeg": 90,
+    "motorLimit": 15.0,
+    "notes": {
+        "sections": "number of bending sections",
+        "nodes": "vertebrae per section, used for the cable-length chord correction in constantCurvature",
+        "robotRadius": "mm, radius of the circle the tendons run on",
+        "sectL": "mm, nominal (straight, uncompressed) length of each section",
+        "spoolRadius": "mm of cable per rad of motor shaft (10 mm shaft diameter / 2)",
+        "toolLength": "mm, straight rigid tool on the end of section 2",
+        "rotationalOffset": "rad, angle from the robot's x axis to tendon A",
+        "tendonAnglesDeg": "tendon positions relative to tendon A. Section 1: A..F (all six run through it). Section 2: A, C, E (B, D, F end at the joint)",
+        "sMinRatio": "shortest allowed section length as a fraction of sectL (sMin = sMinRatio*sectL, sMax = sectL)",
+        "thetaMaxDeg": "largest allowed bend angle k*s per section",
+        "motorLimit": "rad, commands are clamped to +/- this (the STM32 trips at 20 rad). Used by PCC_Cable and Poly"
+    }
+}

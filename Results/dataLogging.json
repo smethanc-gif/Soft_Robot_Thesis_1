@@ -1,0 +1,26 @@
+{
+    "logRoot": "Results/data",
+    "testFolderPrefix": "Test_",
+    "files": {
+        "desiredEgo": "DesiredMotorPosition.txt",
+        "currentEgo": "CurrentMotorPosition.txt",
+        "desiredGlob": "DesiredTipPosition.txt",
+        "calculatedGlob": "CalculatedTipPosition.txt",
+        "currentGlob": "CurrentTipPosition.txt",
+        "configParams": "CylinderParams.txt",
+        "limitsHit": "LimitsHit.txt",
+        "testInfo": "TestInfo.txt"
+    },
+    "notes": {
+        "logRoot": "folder (relative to the repo root) holding one folder per moveMode, each with Test_N folders",
+        "testFolderPrefix": "each run is logged to <logRoot>/<moveMode>/<testFolderPrefix><N>, N counting up",
+        "desiredEgo": "commanded motor angles (rad), A..F",
+        "currentEgo": "measured motor angles from the STM32 (rad), A..F",
+        "desiredGlob": "target tool-tip pose [x, y, z, Rx, Ry, Rz] (mm, rad)",
+        "calculatedGlob": "tool-tip pose the active model predicts for its last command (one row behind the command)",
+        "currentGlob": "camera tip position [x, y, z, 0, 0, 0] (mm)",
+        "configParams": "configuration-space target [k1, r1, s1, k2, r2, s2] (1/mm, rad, mm). File name kept from before the rename so old logs still load",
+        "limitsHit": "PCC limit clamps [s1, s2, bend1, bend2] as 0/1",
+        "testInfo": "run settings as 'key = value' lines, written at the start of the run"
+    }
+}
