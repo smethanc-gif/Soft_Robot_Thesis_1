@@ -84,7 +84,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
             dRx= dRy= dRz =0
 
         case 4: # Full Circle - centred, untilted; complements case 0's off-axis tilted loop
-            x, y, z = 120*cos(angularSpeed*_tNow), 120*sin(angularSpeed*_tNow), 250
+            x, y, z = 100*cos(angularSpeed*_tNow), 100*sin(angularSpeed*_tNow), 280
             Rx, Ry, Rz = 0, 0, 0
             dx, dy, dz = 0, 0, 0
             dRx, dRy, dRz = 0, 0, 0

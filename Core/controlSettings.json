@@ -1,10 +1,10 @@
 {
     "moveMode": "PCC",
-    "trajectory": 5,
+    "trajectory": 9,
     "pdTestMode": "sine",
     "timeStep": 0.04,
-    "taskTime": 60,
-    "movementFreq": 1,
+    "taskTime": 30,
+    "movementFreq": 2,
     "setupTime": 2,
     "setupHoldTime": 0.2,
     "packupTime": 2,

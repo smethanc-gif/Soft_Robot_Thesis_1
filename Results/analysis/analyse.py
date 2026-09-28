@@ -682,7 +682,10 @@ def plotErrorBudget(_tests: list[int], _ctrl: str = "PCC"):
 
 def main():
     '''Tables / plots for the latest test day - uncomment what's needed.'''
-    tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
+    exampleTest = 221
+    #tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
+    #plotStepReturn(exampleTest)
+    plotTracking3D(exampleTest)
     #printTrackingTable(tests)
     #plotSpeedStudy(tests)
     #plotErrorBudget(tests)
@@ -699,7 +702,7 @@ OLD_LABELS = {**{t: "V-spiral" for t in (119, 120, 121, 122)}, **{t: "Figure 8" 
 
 if __name__ == "__main__":
     main()
-    plotTracking3D(194)                 # simple
+    #plotTracking3D(194)                 # simple
     #plotTracking3D(162)                 # more curvature variation
     # plotSpeedStudy([119, 120, 121, 122, 129, 130, 131, 132], _labels=OLD_LABELS)
     # plotErrorBudget([119, 120, 121, 122, 129, 130, 131, 132, 136])
