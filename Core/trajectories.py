@@ -48,7 +48,7 @@ if trajectory == 1:
 
 
 def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[float]]:
-    ''' Returns the Cartesian position and velocity of the tool tip for a chosen trajectory at a given time.\n
+    '''Returns the Cartesian position and velocity of the tool tip for a chosen trajectory at a given time.\n
     0 - Horizontal Circle\n
     1 - Vertical Spiral\n
     2 - Vertical Rotate\n
@@ -79,7 +79,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
 
         case 3:                                         ## Controller Input
             gamepad.update()
-            x, y, z, Rx, Ry, Rz = gamepad.process()
+            x, y, z, Rx, Ry, Rz = gamepad.calcTargGlob()
             dx= dy= dz = 0
             dRx= dRy= dRz =0
 
@@ -133,7 +133,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
 
 
 def getStepReturnPhase(_tNow: float) -> tuple[float, float, str, int]:
-    ''' Step-return test schedule at time _tNow.\n
+    '''Step-return test schedule at time _tNow.\n
         Returns (direction, current bend angle, phase, cycle index), where
         phase is "out", "hold", "back", "rest" or "done".'''
     n = len(SR_DIRS)*len(SR_BENDS)
@@ -155,7 +155,7 @@ def getStepReturnPhase(_tNow: float) -> tuple[float, float, str, int]:
 
 
 def calcStepReturnPos(_phi: float, _bend: float, _shape: str = "C") -> list[float]:
-    ''' Tool pose for a total bend of _bend rad in direction _phi, each
+    '''Tool pose for a total bend of _bend rad in direction _phi, each
         section taking half of it.\n
         "C" - one constant-curvature arc over the whole bending length.\n
         "S" - section 2 bends back by the same amount as section 1: the shape is
@@ -180,7 +180,7 @@ def calcStepReturnPos(_phi: float, _bend: float, _shape: str = "C") -> list[floa
 
 
 def calcPDTestEgo(_tNow: float, _mode: str) -> tuple[list[float], list[float]]:
-    ''' Motor position and velocity targets for the PD_test mode (all six motors
+    '''Motor position and velocity targets for the PD_test mode (all six motors
         the same, tendons disconnected): "ramp" up to 5 rad, hold, ramp down, or
         a 3 rad "sine".'''
     match _mode:

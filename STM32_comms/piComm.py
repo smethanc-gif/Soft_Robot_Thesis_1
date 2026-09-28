@@ -1,5 +1,4 @@
-"""
-pi_comm.py — Raspberry Pi side of the Pi <-> STM32 UART link.
+'''Raspberry Pi side of the Pi <-> STM32 UART link.
 
 Protocol (both directions):
   [0xAA] [CMD] [LEN] [payload] [XOR checksum] [0x55]
@@ -20,7 +19,7 @@ Hardware connection:
   (3.3 V logic on both sides — no level shifter needed for H7 Nucleo)
 
 Install dependency:  pip install pyserial
-"""
+'''
 
 import serial
 import struct
@@ -36,63 +35,69 @@ CMD_GET_STATE   = 0x04
 CMD_STATE       = 0x10
 
 
-def _checksum(cmd: int, payload: bytes) -> int: # Calcuated on both ends, the result is compared to confirm there was no corruption
-    cks = cmd ^ len(payload)
-    for b in payload:
+def _calcChecksum(_cmd: int, _payload: bytes) -> int:
+    '''XOR checksum of a packet, calculated on both ends and compared to confirm there was no corruption.'''
+    cks = _cmd ^ len(_payload)
+    for b in _payload:
         cks ^= b
     return cks & 0xFF
 
 
-def _build_packet(cmd: int, payload: bytes = b"") -> bytes: # Ech packet is: Start, Command, Length of payload, payload, the XOR check value, End
-    cks = _checksum(cmd, payload)
-    return bytes([START, cmd, len(payload)]) + payload + bytes([cks, END]) # 
+def _buildPacket(_cmd: int, _payload: bytes = b"") -> bytes:
+    '''One packet: start, command, payload length, payload, XOR checksum, end.'''
+    cks = _calcChecksum(_cmd, _payload)
+    return bytes([START, _cmd, len(_payload)]) + _payload + bytes([cks, END])
 
 
 class STM32Comm:
-    def __init__(self, port: str = "/dev/ttyS0", baud: int = 115200, timeout: float = 0.1):
-        self.ser = serial.Serial(port, baud, timeout=timeout)
+    def __init__(self, _port: str = "/dev/ttyS0", _baud: int = 115200, _timeout: float = 0.1):
+        '''Opens the UART link to the STM32 (_timeout = read timeout in s).'''
+        self.ser = serial.Serial(_port, _baud, timeout=_timeout)
         time.sleep(0.1)  # let UART settle
         self.ser.reset_input_buffer()
 
     def close(self):
+        '''Closes the UART link.'''
         self.ser.close()
 
     # ------------------------------------------------------------------ #
     #  Commands                                                            #
     # ------------------------------------------------------------------ #
 
-    def set_targets(self, positions: list[float], velocities: list[float]):
-        """Send 6 position targets and 6 velocity targets (radians, rad/s)."""
-        assert len(positions) == 6 and len(velocities) == 6
-        payload = struct.pack("<6f6f", *positions, *velocities)
-        self.ser.write(_build_packet(CMD_SET_TARGETS, payload))
+    def setTargets(self, _positions: list[float], _velocities: list[float]):
+        '''Send 6 position targets and 6 velocity targets (radians, rad/s).'''
+        assert len(_positions) == 6 and len(_velocities) == 6
+        payload = struct.pack("<6f6f", *_positions, *_velocities)
+        self.ser.write(_buildPacket(CMD_SET_TARGETS, payload))
  
     def enable(self):
-        self.ser.write(_build_packet(CMD_ENABLE))
+        '''Enables the motors.'''
+        self.ser.write(_buildPacket(CMD_ENABLE))
 
     def disable(self):
-        self.ser.write(_build_packet(CMD_DISABLE))
+        '''Disables the motors.'''
+        self.ser.write(_buildPacket(CMD_DISABLE))
 
-    def get_state(self) -> list[float] | None:
-        """Request current motor positions. Returns list of 6 floats or None on timeout."""
-        self.ser.write(_build_packet(CMD_GET_STATE))
-        return self._read_state_response()
+    def getState(self) -> list[float] | None:
+        '''Request current motor positions. Returns list of 6 floats or None on timeout.'''
+        self.ser.write(_buildPacket(CMD_GET_STATE))
+        return self._readStateResponse()
 
     # ------------------------------------------------------------------ #
     #  Response parsing                                                    #
     # ------------------------------------------------------------------ #
 
-    def _read_state_response(self) -> list[float] | None:
-        """
+    def _readStateResponse(self) -> list[float] | None:
+        '''
         Read one CMD_STATE packet from the STM32.
         Returns 6 floats or None on parse error / timeout.
-        """
+        '''
         # State machine: WAIT_START → WAIT_CMD → WAIT_LEN → PAYLOAD → WAIT_CKS → WAIT_END
         state = "WAIT_START"
         cmd = 0
         expected = 0
         buf = bytearray()
-        cks_accum = 0
+        cksAccum = 0
 
         deadline = time.monotonic() + self.ser.timeout
         while time.monotonic() < deadline:
@@ -107,23 +112,23 @@ class STM32Comm:
 
             elif state == "WAIT_CMD":
                 cmd = b
-                cks_accum = b
+                cksAccum = b
                 state = "WAIT_LEN"
 
             elif state == "WAIT_LEN":
                 expected = b
-                cks_accum ^= b
+                cksAccum ^= b
                 buf = bytearray()
                 state = "PAYLOAD" if expected > 0 else "WAIT_CKS"
 
             elif state == "PAYLOAD":
                 buf.append(b)
-                cks_accum ^= b
+                cksAccum ^= b
                 if len(buf) >= expected:
                     state = "WAIT_CKS"
 
             elif state == "WAIT_CKS":
-                if b == (cks_accum & 0xFF):
+                if b == (cksAccum & 0xFF):
                     state = "WAIT_END"
                 else:
                     state = "WAIT_START"  # bad checksum
@@ -141,17 +146,17 @@ class STM32Comm:
 # ------------------------------------------------------------------ #
 
 if __name__ == "__main__":
-    stm = STM32Comm(port="/dev/ttyS0", baud=115200)
+    stm = STM32Comm(_port="/dev/ttyS0", _baud=115200)
 
     print("Enabling motors...")
     stm.enable()
     time.sleep(0.5)
 
     print("Sending sinusoidal targets for 5 seconds...")
-    t_start = time.monotonic()
+    tStart = time.monotonic()
     try:
         while True:
-            t = time.monotonic() - t_start
+            t = time.monotonic() - tStart
             if t > 5.0:
                 break
 
@@ -159,9 +164,9 @@ if __name__ == "__main__":
             positions  = [angle] * 6
             velocities = [0.0]  * 6
 
-            stm.set_targets(positions, velocities)
+            stm.setTargets(positions, velocities)
 
-            state = stm.get_state()
+            state = stm.getState()
             if state:
                 print(f"t={t:.2f}s  positions={[f'{p:.3f}' for p in state]}")
 

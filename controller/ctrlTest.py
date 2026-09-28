@@ -1,3 +1,4 @@
+'''Prints the raw axes of joystick 0, to find which axis is which. Ctrl+C to stop.'''
 import pygame, time
 pygame.init()
 pygame.joystick.init()

@@ -61,7 +61,7 @@ def moveToStartPos(_stm: STM32Comm, _tracker: TipTracker, _logger: DataLogger) -
     if moveMode in MODEL_MODES:
         targGlobPos, targGlobVel = calcTargGlob(0, trajectory)
         robot.setTarget(targGlobPos, targGlobVel)
-        targEgoPos, _ = robot.FullIK(targGlobPos, targGlobVel)
+        targEgoPos, _ = robot.solveFullIK(targGlobPos, targGlobVel)
         targEgoVel = [x/timeStep for x in targEgoPos]
     elif moveMode == "PD_test":
         targEgoPos, targEgoVel = calcPDTestEgo(0, pdTestMode)
@@ -86,16 +86,16 @@ def moveToStartPos(_stm: STM32Comm, _tracker: TipTracker, _logger: DataLogger) -
             initEgoPos, initEgoVel = targEgoPos, [0.0]*6
 
         # Data collection for logging
-        currEgoPos = _stm.get_state()
-        calcGlobPos = robot.forwardKinematics() if robot is not None else [0.0]*6
+        currEgoPos = _stm.getState()
+        calcGlobPos = robot.calcForwardKinematics() if robot is not None else [0.0]*6
         currGlobPos = readCamera(_tracker, prevGlobPos)
         prevGlobPos = currGlobPos
         tNow = (tStepStart - tGlob) - 2
         _logger.writeAll(initEgoPos, currEgoPos, targGlobPos, calcGlobPos, currGlobPos, tNow)
         if moveMode in MODEL_MODES:
-            _logger.writeConfig(robot.targCylPos, tNow)
+            _logger.writeConfig(robot.targConfigPos, tNow)
             _logger.writeLimits(robot.limitFlags, tNow)
-        _stm.set_targets(initEgoPos, initEgoVel)
+        _stm.setTargets(initEgoPos, initEgoVel)
 
         waitForStepEnd(tStepStart)
     return tNow, True
@@ -114,7 +114,7 @@ def runControlLoop(_stm: STM32Comm, _tracker: TipTracker, _logger: DataLogger, _
 
         # Feedback
         prevEgoPos = _state["currEgoPos"]
-        currEgoPos = _stm.get_state()
+        currEgoPos = _stm.getState()
         if currEgoPos is None:
             print("Failed to Contact STM32\n")
             currEgoPos = prevEgoPos
@@ -124,23 +124,23 @@ def runControlLoop(_stm: STM32Comm, _tracker: TipTracker, _logger: DataLogger, _
         # Control
         targGlobPos, targGlobVel = calcTargGlob(tNow, trajectory)
         if moveMode in MODEL_MODES:
-            calcGlobPos = robot.forwardKinematics()
-            targEgoPos, targEgoVel = robot.FullIK(targGlobPos, targGlobVel)
+            calcGlobPos = robot.calcForwardKinematics()
+            targEgoPos, targEgoVel = robot.solveFullIK(targGlobPos, targGlobVel)
         elif moveMode == "PD_test":
             targEgoPos, targEgoVel = calcPDTestEgo(tNow, pdTestMode)
             targGlobPos, calcGlobPos, currGlobPos = [0]*6, [0]*6, [0]*6
         else:
             print("No Control Mode Given.\n")
             break
-        _stm.set_targets(targEgoPos, targEgoVel)
+        _stm.setTargets(targEgoPos, targEgoVel)
 
         # Document
         _logger.writeAll(targEgoPos, currEgoPos, targGlobPos, calcGlobPos, currGlobPos, tNow + _tOffset)
         if moveMode in MODEL_MODES:
-            _logger.writeConfig(robot.targCylPos, tNow + _tOffset)
+            _logger.writeConfig(robot.targConfigPos, tNow + _tOffset)
             _logger.writeLimits(robot.limitFlags, tNow + _tOffset)
 
-        if trajectory == 3 and trajectories.gamepad.y_held == 1:
+        if trajectory == 3 and trajectories.gamepad.yHeld == 1:
             break
 
         if not waitForStepEnd(tStepStart):
@@ -155,10 +155,10 @@ def packUp(_stm: STM32Comm, _tracker: TipTracker, _state: dict):
     if _state["currEgoPos"] is not None and _state["motorsEnabled"]:
         endPoint = _state["currEgoPos"]
         for t in range(round(packupTime*freq)):
-            _stm.set_targets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
+            _stm.setTargets([pos * (1 - t/(freq * packupTime)) for pos in endPoint], [0] * 6)
             time.sleep(timeStep)
         for t in range(round(packupHoldTime*freq)):
-            _stm.set_targets([0]*6, [0] * 6)
+            _stm.setTargets([0]*6, [0] * 6)
             time.sleep(timeStep)
     if _tracker is not None:
         _tracker.stop()
@@ -175,7 +175,7 @@ def main():
     try:
         logger = DataLogger(moveMode)
         print("Waiting for camera pose lock...\n")
-        stm = STM32Comm(port=PORT, baud=BAUD, timeout=0.2)
+        stm = STM32Comm(_port=PORT, _baud=BAUD, _timeout=0.2)
         tracker = TipTracker()
         state["tInit"] = time.monotonic()
         while not tracker.getPoseLocked():      # Camera lock check
@@ -186,7 +186,7 @@ def main():
 
         stm.enable()                            # Enable motors
         state["motorsEnabled"] = True
-        stm.set_targets([0]*6, [0]*6)
+        stm.setTargets([0]*6, [0]*6)
         print("Motors Enabled\n")
 
         logger.writeMeta({"moveMode": moveMode, "trajectory": trajectory, "taskTime": taskTime,

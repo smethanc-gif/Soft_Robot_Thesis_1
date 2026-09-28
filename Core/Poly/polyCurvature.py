@@ -1,11 +1,11 @@
-## Goal - "Poly" method: polynomial-curvature model fitted to the robot, inverted for control
-'''
-Forward model: polyModel.polyPose with the fitted constants - tendon gains,
+'''"Poly" method: polynomial-curvature model fitted to the robot, inverted for control.
+
+Forward model: polyModel.calcPolyPose with the fitted constants - tendon gains,
 then linearly varying curvature along each section whose size depends on
-bend size and compression (see results/POLY_CONSTANTS.md).
+bend size and compression (see Results/calibration/polyConstants.md).
 
 Inverse kinematics, each control step:
-  1. Start from the cable-compensated PCC solution q0 (cableComp.py) for the
+  1. Start from the cable-compensated PCC solution q0 (Core/PCC_Cable/cableCompensation.py) for the
      same target - PCC's shape, corrected for the tendon gains.
   2. Find the smallest motor correction d (so q = q0 + d) that puts the Poly
      model's predicted tool tip on the target tip position: damped
@@ -23,16 +23,16 @@ positions, so its tool-orientation predictions aren't validated.
 '''
 import time
 import numpy as np
-
 from Core.PCC_Cable.cableCompensation import CableCompensatedPCC
 from Core.PCC.constantCurvature import ConstantCurvature
 from Core.Poly import polyModel
 
 
 class PolynomialCurvature(CableCompensatedPCC):
-    def __init__(self, constantsFile: str = polyModel.CONSTANTS_FILE):
-        super().__init__(constantsFile)
-        self.modelParams = polyModel.loadConstants(constantsFile)["poly"]
+    def __init__(self, _constantsFile: str = polyModel.CONSTANTS_FILE):
+        '''Cable-compensated PCC robot plus the fitted Poly constants from _constantsFile and the solver settings.'''
+        super().__init__(_constantsFile)
+        self.modelParams = polyModel.loadConstants(_constantsFile)["poly"]
         self.maxIterations = 4
         self.tolerance = 0.1          # mm - stop once the predicted tip is this close to the target
         self.maxCorrection = 3.0      # rad per motor away from the cable-compensated solution
@@ -45,15 +45,15 @@ class PolynomialCurvature(CableCompensatedPCC):
         self._correction = np.zeros(6)
         self._lastSolveTime = None
 
-    def _tipsAndJacobian(self, q: np.ndarray, h: float = 1e-4):
-        ''' Predicted tip at q and its 3x6 Jacobian (one batched model call). '''
-        Q = np.vstack([q, q + h*np.eye(6)])
-        tips = polyModel.polyTip(self.modelParams, Q, self.tendonGains)
-        return tips[0], (tips[1:] - tips[0]).T/h
+    def _calcTipAndJacobian(self, _q: np.ndarray, _h: float = 1e-4) -> tuple[np.ndarray, np.ndarray]:
+        '''Predicted tip at _q and its 3x6 Jacobian (one batched model call).'''
+        Q = np.vstack([_q, _q + _h*np.eye(6)])
+        tips = polyModel.calcPolyTip(self.modelParams, Q, self.tendonGains)
+        return tips[0], (tips[1:] - tips[0]).T/_h
 
-    def solveMotors(self, tipTarget: np.ndarray, q0: np.ndarray) -> np.ndarray:
-        ''' Motor angles whose predicted tip is tipTarget, as close as possible
-            to q0 (the cable-compensated solution). '''
+    def solveMotors(self, _tipTarget: np.ndarray, _q0: np.ndarray) -> np.ndarray:
+        '''Motor angles whose predicted tip is _tipTarget, as close as possible to _q0 (the
+            cable-compensated solution).'''
         t0 = time.perf_counter()
         now = time.monotonic()
         streaming = self._lastSolveTime is not None and 0 < now - self._lastSolveTime <= 0.5
@@ -62,8 +62,8 @@ class PolynomialCurvature(CableCompensatedPCC):
 
         d, best = dPrev.copy(), None
         for it in range(self.maxIterations + 1):
-            tip, J = self._tipsAndJacobian(q0 + d)
-            err = tipTarget - tip
+            tip, J = self._calcTipAndJacobian(_q0 + d)
+            err = _tipTarget - tip
             e = float(np.linalg.norm(err))
             if best is None or e < best[0]:
                 best = (e, d.copy(), it)
@@ -88,13 +88,14 @@ class PolynomialCurvature(CableCompensatedPCC):
         self.limitCount += hit
         self._correction = limited
         self.lastSolveMs = (time.perf_counter() - t0)*1000
-        return q0 + limited
+        return _q0 + limited
 
-    def PCC_Control(self, targGlobPos: np.ndarray):
-        ''' targGlobPos is the bend-end target from ContinuumRobot.toolTransform;
-            the tool tip target is recovered by adding the tool back on. '''
-        ConstantCurvature.PCC_Control(self, targGlobPos)     # PCC target shape -> self.targCylPos
-        q0 = self.compensatedMotors()                         # cable-compensated PCC solution
-        x, y, z, Rx, Ry, _ = targGlobPos
-        tipTarget = np.array([x, y, z]) + self.toolLength*self._tangentFromAngles(Rx, Ry)
-        return self._command(self.solveMotors(tipTarget, q0))
+    def calcEgoTargets(self, _targBendPos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        '''Motor positions and velocities for the bend-end target (from ContinuumRobot.calcBendGlobPos):
+            the tool-tip target is recovered by adding the tool back on, then solveMotors corrects the
+            cable-compensated PCC solution so the Poly model's tip lands on it.'''
+        ConstantCurvature.calcEgoTargets(self, _targBendPos)     # PCC target shape -> self.targConfigPos
+        q0 = self.calcCompensatedEgo()                         # cable-compensated PCC solution
+        x, y, z, Rx, Ry, _ = _targBendPos
+        tipTarget = np.array([x, y, z]) + self.toolLength*self._calcTangentFromAngles(Rx, Ry)
+        return self._applyEgoCommand(self.solveMotors(tipTarget, q0))

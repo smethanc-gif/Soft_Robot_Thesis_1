@@ -1,17 +1,18 @@
-"""
+'''
 Read input from an Xbox controller (or 8BitDo adapter presenting as one)
 using the XInput-Python package, which wraps Windows' native XInput API
 via ctypes (no compiled extension, so no build-tool requirements).
 
 Requires: XInput-Python
     pip install XInput-Python
-"""
+'''
 
 import time
 import XInput
 
 
 def main():
+    '''Prints the first connected controller's sticks, triggers and buttons at ~20 Hz until Ctrl+C.'''
     print("Waiting for a controller (0-3)... (Ctrl+C to stop)\n")
 
     connected = XInput.get_connected()
@@ -29,12 +30,12 @@ def main():
             buttons = XInput.get_button_values(state)
             pressed = [name for name, held in buttons.items() if held]
 
-            left_thumb, right_thumb = XInput.get_thumb_values(state)
-            left_trigger, right_trigger = XInput.get_trigger_values(state)
+            leftThumb, rightThumb = XInput.get_thumb_values(state)
+            leftTrigger, rightTrigger = XInput.get_trigger_values(state)
 
             print(
-                f"L-stick={left_thumb}  R-stick={right_thumb}  "
-                f"L-trig={left_trigger:.2f}  R-trig={right_trigger:.2f}  "
+                f"L-stick={leftThumb}  R-stick={rightThumb}  "
+                f"L-trig={leftTrigger:.2f}  R-trig={rightTrigger:.2f}  "
                 f"buttons={pressed}",
                 end="\r",
             )

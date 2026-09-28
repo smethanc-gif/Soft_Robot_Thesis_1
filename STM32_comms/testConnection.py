@@ -1,5 +1,4 @@
-"""
-test_connection.py — Connection test script for Pi <-> STM32 UART link.
+'''Connection test for the Pi <-> STM32 UART link.
 
 What this does:
   1. Sends a series of fixed position targets so you can confirm receipt
@@ -10,7 +9,7 @@ What this does:
 
 Install dependencies:
   pip install pyserial
-"""
+'''
 import sys
 from pathlib import Path
 
@@ -50,25 +49,27 @@ TEST_SEQUENCE = [
 # ------------------------------------------------------------------ #
 
 class RawKeyboard:
-    """
+    '''
     Puts the terminal in raw mode so individual key presses are readable
     without needing to press Enter. Restores normal mode on exit.
 
     Usage:
         with RawKeyboard() as kb:
             key = kb.read()   # returns a character or None if no key pressed
-    """
+    '''
     def __enter__(self):
+        '''Switches the terminal to raw mode.'''
         self.fd = sys.stdin.fileno()
-        self.old_settings = termios.tcgetattr(self.fd)
+        self.oldSettings = termios.tcgetattr(self.fd)
         tty.setraw(self.fd)
         return self
 
     def __exit__(self, *_):
-        termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old_settings)
+        '''Restores the terminal's previous mode.'''
+        termios.tcsetattr(self.fd, termios.TCSADRAIN, self.oldSettings)
 
     def read(self) -> str | None:
-        """Return the pressed key character, or None if no key is waiting."""
+        '''Return the pressed key character, or None if no key is waiting.'''
         if select.select([sys.stdin], [], [], 0)[0]:
             return sys.stdin.read(1)
         return None
@@ -78,19 +79,22 @@ class RawKeyboard:
 #  File helpers                                                        #
 # ------------------------------------------------------------------ #
 
-def writeDesired(positions: list[float], timestamp: float):
+def writeDesired(_positions: list[float], _timestamp: float):
+    '''Appends one row of desired motor positions to DESIRED_FILE.'''
     with open(DESIRED_FILE, "a") as f:
-        vals = ", ".join(f"{p:.4f}" for p in positions)
-        f.write(f"t={timestamp:.3f}s  [{vals}]\n")
+        vals = ", ".join(f"{p:.4f}" for p in _positions)
+        f.write(f"t={_timestamp:.3f}s  [{vals}]\n")
 
 
-def writeCurrent(positions: list[float], timestamp: float):
+def writeCurrent(_positions: list[float], _timestamp: float):
+    '''Appends one row of measured motor positions to CURRENT_FILE.'''
     with open(CURRENT_FILE, "a") as f:
-        vals = ", ".join(f"{p:.4f}" for p in positions)
-        f.write(f"t={timestamp:.3f}s  [{vals}]\n")
+        vals = ", ".join(f"{p:.4f}" for p in _positions)
+        f.write(f"t={_timestamp:.3f}s  [{vals}]\n")
 
 
-def clear_files():
+def clearFiles():
+    '''Empties both log files.'''
     open(DESIRED_FILE, "w").close()
     open(CURRENT_FILE, "w").close()
 
@@ -100,44 +104,45 @@ def clear_files():
 # ------------------------------------------------------------------ #
 
 def main():
-    clear_files()
+    '''Streams a 20 s spiral through the PCC IK to the STM32, logging desired and measured motor positions, then ramps back to zero.'''
+    clearFiles()
 
-    stm = STM32Comm(port=PORT, baud=BAUD, timeout=1)
-    t_start = time.monotonic()
-    motors_enabled = False
-    t_end = t_start + 20
-    const_1 = math.pi*2*2/20
+    stm = STM32Comm(_port=PORT, _baud=BAUD, _timeout=1)
+    tStart = time.monotonic()
+    motorsEnabled = False
+    tEnd = tStart + 20
+    angularSpeed = math.pi*2*2/20
     robot = CR()
     print("Starting connection test sequence...\n")
 
     try:
 
-        while time.monotonic() <= t_end: # 6 Seconds time limit        
-            t_now = time.monotonic() - t_start
+        while time.monotonic() <= tEnd: # 6 Seconds time limit        
+            tNow = time.monotonic() - tStart
             
             #positions  = [math.pi *2* (1 + math.sin(math.pi*t_now))/3] *6 #[5,0,3,0,5,0]
             #positions = [t_now]*6
-            x   , y   , z   = 100* math.sin(const_1*t_now) *math.sin(const_1*t_now/8), 100*math.cos(const_1*t_now)*math.sin(const_1*t_now/8), 290
+            x   , y   , z   = 100* math.sin(angularSpeed*tNow) *math.sin(angularSpeed*tNow/8), 100*math.cos(angularSpeed*tNow)*math.sin(angularSpeed*tNow/8), 290
             Rx  , Ry  , Rz  = 0, 0, 0
             targGlobPos = [x, y, z, Rx, Ry, Rz]
 
             targGlobVel = [0]  * 6
-            positions, velocities  = robot.FullIK(targGlobPos, targGlobVel)
-            if not motors_enabled:
+            positions, velocities  = robot.solveFullIK(targGlobPos, targGlobVel)
+            if not motorsEnabled:
                 stm.enable()
                             
                     # --- Send target --- #
-            stm.set_targets(positions, velocities)
-            writeDesired(positions, t_now)
+            stm.setTargets(positions, velocities)
+            writeDesired(positions, tNow)
 
                     # --- Request and log state --- #
-            state = stm.get_state()
+            state = stm.getState()
             if state:
-                writeCurrent(state, t_now)
-                print(f"  t={t_now:.2f}s  desired={positions[1]:.3f}  "
+                writeCurrent(state, tNow)
+                print(f"  t={tNow:.2f}s  desired={positions[1]:.3f}  "
                               f"actual=[{', '.join(f'{p:.3f}' for p in state)}]")
             else:
-                print(f"  t={t_now:.2f}s  no response from STM32")
+                print(f"  t={tNow:.2f}s  no response from STM32")
 
             time.sleep(1/30)  # 30 Hz polling        
 
@@ -149,9 +154,9 @@ def main():
         print("Disabling motors and cleaning up.")
         endPos = positions
         for i in range(1000):
-            stm.set_targets([x *(1 - i/1000) for x in endPos], [0]*6)
+            stm.setTargets([x *(1 - i/1000) for x in endPos], [0]*6)
             time.sleep(0.001)
-        stm.set_targets([0.0]*6, [0.0]*6)
+        stm.setTargets([0.0]*6, [0.0]*6)
         time.sleep(1)
         stm.disable()
         stm.close()

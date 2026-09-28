@@ -1,3 +1,7 @@
+'''Tracks the robot's tip in 3D with the RealSense camera: colour segmentation of the tip, its depth,
+and an ArUco marker that defines the global reference frame. Used by main.py (TipTracker.update);
+run this file directly for the live viewer windows.
+'''
 import cv2
 import numpy as np
 import pyrealsense2 as rs
@@ -83,7 +87,7 @@ DEPTH_ERODE_PX = 2
 # ============================================================
 
 class TipTracker:
-    """Tracks the robot tip in 3D relative to an ArUco marker.
+    '''Tracks the robot tip in 3D relative to an ArUco marker.
 
     Use from another script:
         tracker = TipTracker()
@@ -94,24 +98,25 @@ class TipTracker:
         tracker.stop()
 
     Or run this file directly for the live viewer windows.
-    """
+    '''
 
     def __init__(self):
-        self.pose_rvecs = []
-        self.pose_tvecs = []
-        self.pose_locked = False
-        self.marker_R = None
-        self.marker_t = None
-        self.rvec_avg = None
-        self.tvec_avg = None
-        self.tip_smooth = None
+        '''Starts the camera (and locks its colour sensor); the marker pose is locked from the first POSE_SAMPLES detections.'''
+        self.poseRvecs = []
+        self.poseTvecs = []
+        self.poseLocked = False
+        self.markerR = None
+        self.markerT = None
+        self.rvecAvg = None
+        self.tvecAvg = None
+        self.tipSmooth = None
         self.position = None
-        self.open_kernel = np.ones((OPEN_KERNEL, OPEN_KERNEL), np.uint8)
-        self.close_kernel = np.ones((CLOSE_KERNEL, CLOSE_KERNEL), np.uint8)
-        self.depth_erode_kernel = np.ones((2*DEPTH_ERODE_PX + 1, 2*DEPTH_ERODE_PX + 1), np.uint8)
+        self.openKernel = np.ones((OPEN_KERNEL, OPEN_KERNEL), np.uint8)
+        self.closeKernel = np.ones((CLOSE_KERNEL, CLOSE_KERNEL), np.uint8)
+        self.depthErodeKernel = np.ones((2*DEPTH_ERODE_PX + 1, 2*DEPTH_ERODE_PX + 1), np.uint8)
 
         half = MARKER_SIZE_MM / 2
-        self.marker_obj_points = np.array([[-half,  half, 0],
+        self.markerObjPoints = np.array([[-half,  half, 0],
                                            [ half,  half, 0],
                                            [ half, -half, 0],
                                            [-half, -half, 0]], dtype=np.float32)
@@ -120,13 +125,14 @@ class TipTracker:
             cv2.aruco.getPredefinedDictionary(ARUCO_DICT),
             cv2.aruco.DetectorParameters())
 
-        self._start_camera()
+        self._startCamera()
         if LOCK_COLOR_SENSOR:
-            self._lock_colour_sensor()
+            self._lockColourSensor()
 
     # ---------------- camera ----------------
 
-    def _start_camera(self):
+    def _startCamera(self):
+        '''Starts the colour + depth streams, aligned, and reads the factory intrinsics.'''
         self.pipeline = rs.pipeline()
         config = rs.config()
         config.enable_stream(rs.stream.color, FRAME_W, FRAME_H, rs.format.bgr8, FPS)
@@ -135,85 +141,84 @@ class TipTracker:
 
         # Align depth frames onto the colour frames
         self.align = rs.align(rs.stream.color)
-        self.depth_scale = profile.get_device().first_depth_sensor().get_depth_scale()
-        self.color_sensor = profile.get_device().first_color_sensor()
+        self.depthScale = profile.get_device().first_depth_sensor().get_depth_scale()
+        self.colorSensor = profile.get_device().first_color_sensor()
 
         # Colour camera intrinsics (factory calibrated - no checkerboard needed)
         self.intr = (profile.get_stream(rs.stream.color)
                      .as_video_stream_profile().get_intrinsics())
-        self.camera_matrix = np.array([[self.intr.fx, 0, self.intr.ppx],
+        self.cameraMatrix = np.array([[self.intr.fx, 0, self.intr.ppx],
                                        [0, self.intr.fy, self.intr.ppy],
                                        [0, 0, 1]])
-        self.dist_coeffs = np.array(self.intr.coeffs)
+        self.distCoeffs = np.array(self.intr.coeffs)
 
         # Let the stream actually start before touching sensor options
         for _ in range(10):
             self.pipeline.wait_for_frames()
 
         # Stop auto exposure dropping the frame rate below FPS in dim light
-        self.color_sensor.set_option(rs.option.auto_exposure_priority, 0)
+        self.colorSensor.set_option(rs.option.auto_exposure_priority, 0)
 
-    def _lock_colour_sensor(self):
-        # Let auto exposure/white balance settle, then freeze them so the tip
-        # colour stays inside the HSV band
+    def _lockColourSensor(self):
+        '''Lets auto exposure/white balance settle, then freezes them so the tip colour stays inside the HSV band.'''
         print(f"letting exposure settle for {SETTLE_FRAMES} frames...")
         for _ in range(SETTLE_FRAMES):
             self.pipeline.wait_for_frames()
-        exposure = MANUAL_EXPOSURE or self.color_sensor.get_option(rs.option.exposure)
-        white_bal = (MANUAL_WHITE_BALANCE
-                     or self.color_sensor.get_option(rs.option.white_balance))
-        self.color_sensor.set_option(rs.option.enable_auto_exposure, 0)
-        self.color_sensor.set_option(rs.option.exposure, exposure)
-        self.color_sensor.set_option(rs.option.enable_auto_white_balance, 0)
-        self.color_sensor.set_option(rs.option.white_balance, white_bal)
-        print(f"locked exposure={exposure:.0f} white_balance={white_bal:.0f}")
+        exposure = MANUAL_EXPOSURE or self.colorSensor.get_option(rs.option.exposure)
+        whiteBal = (MANUAL_WHITE_BALANCE
+                     or self.colorSensor.get_option(rs.option.white_balance))
+        self.colorSensor.set_option(rs.option.enable_auto_exposure, 0)
+        self.colorSensor.set_option(rs.option.exposure, exposure)
+        self.colorSensor.set_option(rs.option.enable_auto_white_balance, 0)
+        self.colorSensor.set_option(rs.option.white_balance, whiteBal)
+        print(f"locked exposure={exposure:.0f} white_balance={whiteBal:.0f}")
 
-    def get_frames(self):
-        # Returns (colour image, depth image) or (None, None) if a frame dropped
+    def getFrames(self):
+        '''Returns (colour image, depth image), or (None, None) if a frame dropped.'''
         frames = self.align.process(self.pipeline.wait_for_frames())
-        color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-        if not color_frame or not depth_frame:
+        colorFrame = frames.get_color_frame()
+        depthFrame = frames.get_depth_frame()
+        if not colorFrame or not depthFrame:
             return None, None
-        return (np.asanyarray(color_frame.get_data()),
-                np.asanyarray(depth_frame.get_data()))
+        return (np.asanyarray(colorFrame.get_data()),
+                np.asanyarray(depthFrame.get_data()))
 
     # ---------------- marker pose ----------------
 
-    def update_marker_pose(self, frame):
-        # Accumulate detections until POSE_SAMPLES, then average and freeze
-        if self.pose_locked:
+    def updateMarkerPose(self, _frame):
+        '''Accumulates marker detections until POSE_SAMPLES, then averages and freezes the marker pose.'''
+        if self.poseLocked:
             return
-        corners, ids, _ = self.detector.detectMarkers(frame)
+        corners, ids, _ = self.detector.detectMarkers(_frame)
         if ids is not None:
-            for marker_corners, marker_id in zip(corners, ids.flatten()):
-                if marker_id == MARKER_ID:
+            for markerCorners, markerId in zip(corners, ids.flatten()):
+                if markerId == MARKER_ID:
                     ok, rvec, tvec = cv2.solvePnP(
-                        self.marker_obj_points, marker_corners.reshape(4, 2),
-                        self.camera_matrix, self.dist_coeffs,
+                        self.markerObjPoints, markerCorners.reshape(4, 2),
+                        self.cameraMatrix, self.distCoeffs,
                         flags=cv2.SOLVEPNP_IPPE_SQUARE)
                     if ok:
-                        self.pose_rvecs.append(rvec)
-                        self.pose_tvecs.append(tvec)
-        if len(self.pose_rvecs) >= POSE_SAMPLES:
-            self.rvec_avg = np.mean(self.pose_rvecs, axis=0)
-            self.tvec_avg = np.mean(self.pose_tvecs, axis=0)
-            self.marker_R, _ = cv2.Rodrigues(self.rvec_avg)
-            self.marker_t = self.tvec_avg.flatten()
-            self.pose_locked = True
+                        self.poseRvecs.append(rvec)
+                        self.poseTvecs.append(tvec)
+        if len(self.poseRvecs) >= POSE_SAMPLES:
+            self.rvecAvg = np.mean(self.poseRvecs, axis=0)
+            self.tvecAvg = np.mean(self.poseTvecs, axis=0)
+            self.markerR, _ = cv2.Rodrigues(self.rvecAvg)
+            self.markerT = self.tvecAvg.flatten()
+            self.poseLocked = True
             print(f"\nmarker pose locked from {POSE_SAMPLES} samples")
 
     # ---------------- segmentation ----------------
 
-    def segment_tip(self, frame):
-        # Returns (mask, centroid, blob) - blob is a filled mask of just the tip
-        # blob; centroid and blob are None if there's no valid blob
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    def segmentTip(self, _frame):
+        '''Returns (mask, centroid, blob) - blob is a filled mask of just the tip blob; centroid and
+            blob are None if there's no valid blob.'''
+        hsv = cv2.cvtColor(_frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, HSV_LOWER, HSV_UPPER)
 
         # Clean out the noise - open drops specks, close fills holes
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.open_kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.close_kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.openKernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.closeKernel)
 
         # Largest blob that is big enough to be the tip
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -231,63 +236,62 @@ class TipTracker:
         cv2.drawContours(blob, [tip], -1, 255, thickness=cv2.FILLED)
         return mask, centroid, blob
 
-    def tip_depth_mm(self, depth_image, blob):
-        # Median of the valid depth pixels over the tip blob (depth is aligned
-        # to the colour frame, so the blob indexes it directly), rim eroded off
-        core = cv2.erode(blob, self.depth_erode_kernel) if DEPTH_ERODE_PX > 0 else blob
-        valid = depth_image[(core > 0) & (depth_image > 0)]
+    def calcTipDepth(self, _depthImage, _blob):
+        '''Tip depth (mm): median of the valid depth pixels over the tip blob (depth is aligned to the
+            colour frame, so the blob indexes it directly), rim eroded off. None if there's no depth data.'''
+        core = cv2.erode(_blob, self.depthErodeKernel) if DEPTH_ERODE_PX > 0 else _blob
+        valid = _depthImage[(core > 0) & (_depthImage > 0)]
         if valid.size == 0:     # blob too small to survive the erosion - use all of it
-            valid = depth_image[(blob > 0) & (depth_image > 0)]
+            valid = _depthImage[(_blob > 0) & (_depthImage > 0)]
         if valid.size == 0:
             return None
-        depth = float(np.median(valid) * self.depth_scale * 1000)
-        #print(f"Tip depth from camera: {depth}mm\n")
+        depth = float(np.median(valid) * self.depthScale * 1000)
         return depth
 
     # ---------------- 3D position ----------------
 
-    def to_global(self, cx, cy, d_mm):
-        # Pixel + depth -> camera frame -> marker frame -> global frame (mm)
-        p_cam = np.array(rs.rs2_deproject_pixel_to_point(
-            self.intr, [cx, cy], d_mm / 1000)) * 1000
-        p_marker = self.marker_R.T @ (p_cam - self.marker_t)
-        return p_marker - ORIGIN_OFFSET_MM
+    def convertToGlobal(self, _cx, _cy, _depthMm):
+        '''Pixel + depth -> camera frame -> marker frame -> global frame (mm).'''
+        pCam = np.array(rs.rs2_deproject_pixel_to_point(
+            self.intr, [_cx, _cy], _depthMm / 1000)) * 1000
+        pMarker = self.markerR.T @ (pCam - self.markerT)
+        return pMarker - ORIGIN_OFFSET_MM
 
     def update(self):
-        """Process one frame. Returns a dict with:
+        '''Processes one frame. Returns a dict with:
         position - smoothed np.array [x, y, z] in mm, or None
         status   - human-readable state string
         frame    - colour image (for display)
         mask     - segmentation mask (for display)
         centroid - tip pixel (cx, cy), or None
-        """
-        frame, depth_image = self.get_frames()
+        '''
+        frame, depthImage = self.getFrames()
         if frame is None:
             return {"position": None, "status": "frame dropped",
                     "frame": None, "mask": None, "centroid": None}
 
-        self.update_marker_pose(frame)
-        mask, centroid, blob = self.segment_tip(frame)
+        self.updateMarkerPose(frame)
+        mask, centroid, blob = self.segmentTip(frame)
 
         position = None
         status = "no tip found"
         if centroid is not None:
             cx, cy = centroid
-            d_mm = self.tip_depth_mm(depth_image, blob)
-            if d_mm is None:
+            depthMm = self.calcTipDepth(depthImage, blob)
+            if depthMm is None:
                 status = "tip found, no depth data"
-            elif not self.pose_locked:
-                status = f"locking marker pose {len(self.pose_rvecs)}/{POSE_SAMPLES}"
+            elif not self.poseLocked:
+                status = f"locking marker pose {len(self.poseRvecs)}/{POSE_SAMPLES}"
             else:
-                p_global = self.to_global(cx, cy, d_mm)
+                pGlobal = self.convertToGlobal(cx, cy, depthMm)
 
                 # Smooth the output
-                if self.tip_smooth is None:
-                    self.tip_smooth = p_global
+                if self.tipSmooth is None:
+                    self.tipSmooth = pGlobal
                 else:
-                    self.tip_smooth = (SMOOTHING * p_global
-                                       + (1 - SMOOTHING) * self.tip_smooth)
-                position = self.tip_smooth
+                    self.tipSmooth = (SMOOTHING * pGlobal
+                                       + (1 - SMOOTHING) * self.tipSmooth)
+                position = self.tipSmooth
                 x, y, z = position
                 status = f"X {x:7.1f}  Y {y:7.1f}  Z {z:7.1f} mm"
                 
@@ -295,28 +299,29 @@ class TipTracker:
                 "frame": frame, "mask": mask, "centroid": centroid}
 
     def stop(self):
+        '''Stops the camera stream.'''
         self.pipeline.stop()
-
 
     # ---------------- live viewer ----------------
 
-    def annotate(self, result):
-        frame = result["frame"]
-        if result["centroid"] is not None:
-            cv2.circle(frame, result["centroid"], 5, (0, 255, 0), -1)
-        if self.marker_R is not None:
-            cv2.drawFrameAxes(frame, self.camera_matrix, self.dist_coeffs,
-                              self.rvec_avg, self.tvec_avg, MARKER_SIZE_MM * 0.75)
-        if not self.pose_locked:
+    def annotate(self, _result):
+        '''Draws the tip centroid, marker axes and status text onto the frame for the live viewer.'''
+        frame = _result["frame"]
+        if _result["centroid"] is not None:
+            cv2.circle(frame, _result["centroid"], 5, (0, 255, 0), -1)
+        if self.markerR is not None:
+            cv2.drawFrameAxes(frame, self.cameraMatrix, self.distCoeffs,
+                              self.rvecAvg, self.tvecAvg, MARKER_SIZE_MM * 0.75)
+        if not self.poseLocked:
             cv2.putText(frame,
-                        f"locking marker pose {len(self.pose_rvecs)}/{POSE_SAMPLES}",
+                        f"locking marker pose {len(self.poseRvecs)}/{POSE_SAMPLES}",
                         (10, FRAME_H - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (0, 0, 255), 2)
-        cv2.putText(frame, result["status"], (10, 30),
+        cv2.putText(frame, _result["status"], (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
     def run(self):
-        # Live viewer loop - q to quit
+        '''Live viewer loop - q to quit.'''
         while True:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
@@ -329,8 +334,10 @@ class TipTracker:
             self.annotate(result)
             cv2.imshow("frame", result["frame"])
             cv2.imshow("mask", result["mask"])
+
     def getPoseLocked(self) -> bool:
-        return self.pose_locked
+        '''True once the marker pose has been averaged and frozen.'''
+        return self.poseLocked
 
 if __name__ == "__main__":
     tracker = TipTracker()
