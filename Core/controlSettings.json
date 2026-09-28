@@ -1,10 +1,10 @@
 {
     "moveMode": "PCC_Cable",
-    "trajectory": 8,
+    "trajectory": 5,
     "pdTestMode": "sine",
     "timeStep": 0.04,
-    "taskTime": 30,
-    "movementFreq": 2,
+    "taskTime": 180,
+    "movementFreq": 1,
     "setupTime": 2,
     "setupHoldTime": 0.2,
     "packupTime": 2,

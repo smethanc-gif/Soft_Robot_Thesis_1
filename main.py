@@ -13,7 +13,7 @@ from Core import trajectories
 from Core.trajectories import calcTargGlob, calcPDTestEgo
 from Results.dataLogger import DataLogger
 from camera_feedback.robotTracker import TipTracker, SMOOTHING
-#from Results.analysis import analyse as A
+from Results.analysis import analyse as Ana
 
 # ---- Comms ----
 PORT    = "/dev/ttyS0"
@@ -34,7 +34,7 @@ freq            = 1/timeStep
 taskTime        = trajectories.taskTime                 # set per trajectory in Core/trajectories.py
 packupTime      = CONTROL["packupTime"]                 # time to ramp back to zero after the task
 packupHoldTime  = CONTROL["packupHoldTime"]             # time held at zero after the pack-up ramp, before disabling
-
+testNumber = 1
 
 def readCamera(_tracker: TipTracker, _prevGlobPos: list[float]) -> list[float]:
     '''Latest camera tip position as [x, y, z, 0, 0, 0], or the previous one if the frame was missed.'''
@@ -92,7 +92,8 @@ def moveToStartPos(_stm: STM32Comm, _tracker: TipTracker, _logger: DataLogger) -
         currGlobPos = readCamera(_tracker, prevGlobPos)
         prevGlobPos = currGlobPos
         tNow = (tStepStart - tGlob) - 2
-        _logger.writeAll(initEgoPos, currEgoPos, targGlobPos, calcGlobPos, currGlobPos, tNow)
+        global testNumber 
+        testNumber = _logger.writeAll(initEgoPos, currEgoPos, targGlobPos, calcGlobPos, currGlobPos, tNow)
         if moveMode in MODEL_MODES:
             _logger.writeConfig(robot.targConfigPos, tNow)
             _logger.writeLimits(robot.limitFlags, tNow)
@@ -206,3 +207,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print(f"Yoooo! Check this out! I can make Test {testNumber} into a graph.")
+    Ana.plotTracking3D(_ctrl=CONTROL["moveMode"],_test=testNumber)
