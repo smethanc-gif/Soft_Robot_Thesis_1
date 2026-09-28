@@ -8,12 +8,12 @@ from math import sin as S
 from math import cos as C
 from math import pi as PI
 import numpy as np
-from STM32_comms.pi_comm import STM32Comm
-from PCC_control.CTRL import ContinuumRobot
-from results import fileWriting as W
-from camera_feedback.robot_tracker import TipTracker, SMOOTHING
+from STM32_comms.piComm import STM32Comm
+from Core.continuumRobot import ContinuumRobot
+from Results import dataLogger as W
+from camera_feedback.robotTracker import TipTracker, SMOOTHING
 from controller.ctrlInput import Controller as INPUT
-import results.Graphing as G
+import Results.analysis.graphing as G
 
 ## COMMS ##
 PORT    = "/dev/ttyS0"
