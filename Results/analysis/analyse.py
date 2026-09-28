@@ -481,6 +481,8 @@ def loadMeta(test: int, ctrl: str = "PCC") -> dict:
                 except ValueError:
                     pass
             meta[key] = value
+    if "movementfreq" in meta:                  # key name in logs from before the rename
+        meta["movementFreq"] = meta.pop("movementfreq")
     return meta
 
 
@@ -488,7 +490,7 @@ def _period(des: numpy.ndarray, dt: float, meta: dict) -> float:
     ''' Trajectory period (s): from TestInfo.txt when the trajectory is a
         plain periodic one, otherwise the dominant FFT period of the desired
         path on its most-moving axis.'''
-    mf, traj, T = meta.get("movementfreq"), meta.get("trajectory"), meta.get("taskTime")
+    mf, traj, T = meta.get("movementFreq"), meta.get("trajectory"), meta.get("taskTime")
     if isinstance(mf, (int, float)) and mf > 0 and T:
         if traj in (0, 4, 7, 8):
             return T/mf

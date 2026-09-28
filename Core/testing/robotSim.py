@@ -34,8 +34,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, so this file can be run directly
 from Core.continuumRobot import ContinuumRobot as control1
-from Core.settings import loadRobotGeometry
-from main import MOVEMENT_FUNCTIONS, setupTime, taskTime, packupTime, trajectory
+from Core.settings import loadRobotGeometry, loadControlSettings
+from Core.trajectories import calcTargGlob, taskTime, trajectory
 from controller.ctrlInput import Controller
 
 # ---- Robot parameters (from ContinuumRobot.py) ----
@@ -43,6 +43,8 @@ NODES = 10
 SECTIONS = 2
 ROBOT_DIAMETER = 20   # mm
 SECT_LENGTH = loadRobotGeometry()["sectL"]   # mm
+setupTime = loadControlSettings()["setupTime"]
+packupTime = loadControlSettings()["packupTime"]
 CHECK = False
 Robot = control1()
 t_start = time.monotonic()
@@ -155,8 +157,8 @@ def animate(use_controller: bool = False):
     # Cartesian targets -> FullIK. "Rest" is the fully-straight pose, the
     # Cartesian analogue of main.py's ego=0.
     restPose = np.array([0.0, 0.0, 2*Robot.sectL, 0.0, 0.0, 0.0])
-    taskStartPose = np.array(MOVEMENT_FUNCTIONS(0.0, trajectory)[0])
-    taskEndPose = np.array(MOVEMENT_FUNCTIONS(taskTime, trajectory)[0])
+    taskStartPose = np.array(calcTargGlob(0.0, trajectory)[0])
+    taskEndPose = np.array(calcTargGlob(taskTime, trajectory)[0])
     cycleLength = setupTime + taskTime + packupTime
 
     def targetForCycleTime(t_cycle: float) -> list[float]:
@@ -164,7 +166,7 @@ def animate(use_controller: bool = False):
             frac = t_cycle / setupTime
             return (restPose + frac*(taskStartPose - restPose)).tolist()
         elif t_cycle < setupTime + taskTime:                      # main trajectory
-            pos, _ = MOVEMENT_FUNCTIONS(t_cycle - setupTime, trajectory)
+            pos, _ = calcTargGlob(t_cycle - setupTime, trajectory)
             return pos
         else:                                                     # packup-equivalent ramp-down
             frac = (t_cycle - setupTime - taskTime) / packupTime
