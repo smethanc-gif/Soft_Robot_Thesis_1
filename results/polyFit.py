@@ -36,23 +36,11 @@ try:
     from . import analyse as A
 except ImportError:
     import analyse as A
-from PCC_control.constantCurve import ConstantCurvature   # analyse puts the repo root on sys.path
-
-# ---------------- robot constants (from constantCurve.py) ----------------
-_R = ConstantCurvature()
-D = _R.robotRadius
-SECT_L = _R.sectL
-SPOOL = _R.spoolRadius
-TOOL = _R.toolLength
-CABLE0 = numpy.array(_R.initCableLen)
-N_SUB = 8                               # sub-segments per section, as poly.py's N
-
-_B1 = _R.rotationalOffset + numpy.radians([0, 60, 120, 180, -120, -60])   # section-1 tendon angles, A..F
-_B2 = _R.rotationalOffset + numpy.radians([0, 120, -120])                 # section-2 tendon angles, A, C, E
-_W1 = numpy.c_[numpy.sin(_B1), numpy.cos(_B1)]      # l1_i = s1 - D*(W1_i . v1)
-_W2 = numpy.c_[numpy.sin(_B2), numpy.cos(_B2)]
-_INV1 = numpy.linalg.inv(numpy.c_[numpy.ones(3), -D*_W1[[1, 3, 5]]])     # [s1, v1x, v1y] from l_B, l_D, l_F
-_INV2 = numpy.linalg.inv(numpy.c_[numpy.ones(3), -D*_W2])                  # [s2, v2x, v2y] from section-2 part of l_A, l_C, l_E
+# The model itself (motors -> section shapes -> Poly tip) lives with the
+# controllers so the robot uses exactly what was fitted here.
+import PCC_control.polyModel as polyModel
+from PCC_control.polyModel import (SECT_L, N_SUB, ALL_TERMS, REAL_TERMS, TERMS, CONSTANTS_FILE,
+                                   sectionsFromMotors, pccParams, unpack, polyShape, polyTip)
 
 # ---------------- data sets ----------------
 TRAIN = {"step-return": [191, 203, 204],
@@ -63,84 +51,15 @@ VALID = {"circle": [194, 198], "figure 8": [208], "helix": [213, 217]}
 STEP_RETURN_STRIDE = 3                  # step-returns are ~7000 samples each - thin them so they don't swamp the rest
 POLY_VARIANT = "real+extra"             # stage-2 terms kept (see VARIANTS)
 SHAPE_WEIGHT = 1.0                      # mm of tip error per deg of section bend moved away from calibrated PCC
-CONSTANTS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                              "PCC_control", "poly_constants.json")
 
-
-# ============================================================
-# Motors -> PCC-equivalent section shapes
-# ============================================================
-
-def sectionsFromMotors(q: numpy.ndarray):
-    ''' Motor angles [sample][A..F] (rad) -> per-section arc length s (mm) and
-        bend vector v (rad, as a complex number: x + iy), by inverting
-        PCC_Control's cable model (linearised - within 0.03 mm / 0.02 deg of
-        PCC's own arc parameters). Section 2's bend is in section 1's end
-        frame, as in PCC.'''
-    l = CABLE0 - SPOOL*numpy.atleast_2d(q)
-    x1 = l[:, [1, 3, 5]] @ _INV1.T                                   # [s1, v1x, v1y]
-    l1_ace = x1[:, :1] - D*(x1[:, 1:] @ _W1[[0, 2, 4]].T)             # section-1 part of A, C, E
-    x2 = (l[:, [0, 2, 4]] - l1_ace) @ _INV2.T                        # [s2, v2x, v2y]
-    return x1[:, 0], x1[:, 1] + 1j*x1[:, 2], x2[:, 0], x2[:, 1] + 1j*x2[:, 2]
-
-
-# ============================================================
-# Vectorised Poly forward kinematics
-# ============================================================
-
-def _arcs(kx, ky, ds):
-    ''' constantCurve.arcFK for many samples at once. '''
-    k = numpy.hypot(kx, ky)
-    r = numpy.arctan2(ky, kx)
-    th = k*ds
-    ct, st, cp, sp = numpy.cos(th), numpy.sin(th), numpy.cos(r), numpy.sin(r)
-    small = k < 1e-12
-    ks = numpy.where(small, 1.0, k)
-    rho = numpy.where(small, 0.0, (1 - ct)/ks)
-    z = numpy.where(small, ds, st/ks)
-    p = numpy.stack([rho*cp, rho*sp, z], axis=-1)
-    R = numpy.empty(k.shape + (3, 3))
-    R[:, 0, 0] = cp*cp*ct + sp*sp; R[:, 0, 1] = sp*cp*(ct - 1); R[:, 0, 2] = cp*st
-    R[:, 1, 0] = sp*cp*(ct - 1);   R[:, 1, 1] = sp*sp*ct + cp*cp; R[:, 1, 2] = sp*st
-    R[:, 2, 0] = -cp*st;           R[:, 2, 1] = -sp*st;           R[:, 2, 2] = ct
-    return p, R
-
-
-def _sectionFK(k0: numpy.ndarray, k1: numpy.ndarray, s: numpy.ndarray):
-    ''' One section with complex curvature k0 + k1*sigma (1/mm), as poly.polyFK. '''
-    p = numpy.zeros((len(s), 3))
-    R = numpy.broadcast_to(numpy.eye(3), (len(s), 3, 3))
-    ds = s/N_SUB
-    for i in range(N_SUB):
-        kk = k0 + k1*(i + 0.5)/N_SUB
-        pi, Ri = _arcs(kk.real, kk.imag, ds)
-        p = p + numpy.einsum("mij,mj->mi", R, pi)
-        R = R @ Ri
-    return p, R
-
-
-# Parameter layout: complex terms as (re, im) pairs, then the two length gains.
-# Every variant uses this full vector; a variant just picks which entries are
-# fitted (the rest stay at their PCC values).
-TERMS = ["c0_1", "h0_1", "c1_1", "h1_1", "c0_2", "h0_2", "c1_2", "h1_2"]
-EXTRA_TERMS = ["m_1", "m_2", "z_1", "z_2"]        # bend-size (|v|^2) and compression (s - sectL) gain terms
-ALL_TERMS = TERMS + EXTRA_TERMS
-REAL_TERMS = ["lam_1", "lam_2"]
+# Every variant uses polyModel's full parameter vector; a variant just picks
+# which entries are fitted (the rest stay at their PCC values).
 VARIANTS = {                                       # (terms fitted, rotations allowed, one shared length gain)
     "real":          (TERMS, False, True),
     "real+extra":    (ALL_TERMS, False, True),
     "complex":       (TERMS, True, False),
     "complex+extra": (ALL_TERMS, True, False),
 }
-
-
-def pccParams() -> numpy.ndarray:
-    ''' Full parameter vector that reproduces PCC exactly. '''
-    p = numpy.zeros(2*len(ALL_TERMS) + len(REAL_TERMS))
-    for name in ("c0_1", "c0_2"):
-        p[2*ALL_TERMS.index(name)] = 1.0
-    p[-2:] = 1.0
-    return p
 
 
 def _freeIndex(variant: str) -> numpy.ndarray:
@@ -162,40 +81,6 @@ def expand(x: numpy.ndarray, variant: str) -> numpy.ndarray:
     if VARIANTS[variant][2]:
         full[-1] = full[-2]                        # shared length gain
     return full
-
-
-def unpack(params: numpy.ndarray) -> dict:
-    out = {name: params[2*i] + 1j*params[2*i + 1] for i, name in enumerate(ALL_TERMS)}
-    out.update({name: params[2*len(ALL_TERMS) + i] for i, name in enumerate(REAL_TERMS)})
-    return out
-
-
-def polyShape(params: numpy.ndarray, q: numpy.ndarray, gains=None) -> dict:
-    ''' Both sections' Poly shape for motor angles q: arc lengths s1', s2',
-        overall bends A1, A2 (rad, complex = direction + size), curvature
-        slopes B1, B2, and the calibrated-PCC bends v1, v2 they grew from.
-        gains = per-tendon cable-travel gains A..F (None = 1). '''
-    P = unpack(params)
-    s1, v1, s2, v2 = sectionsFromMotors(q if gains is None else q*gains)
-    g1 = P["c0_1"] + P["m_1"]*abs(v1)**2 + P["z_1"]*(s1 - SECT_L)/SECT_L
-    g2 = P["c0_2"] + P["m_2"]*abs(v2)**2 + P["z_2"]*(s2 - SECT_L)/SECT_L
-    return {"A1": g1*v1 + P["h0_1"]*v2, "B1": P["c1_1"]*v1 + P["h1_1"]*v2,
-            "A2": g2*v2 + P["h0_2"]*v1, "B2": P["c1_2"]*v2 + P["h1_2"]*v1,
-            "s1": SECT_L + P["lam_1"]*(s1 - SECT_L), "s2": SECT_L + P["lam_2"]*(s2 - SECT_L),
-            "v1": v1, "v2": v2}
-
-
-def polyTip(params: numpy.ndarray, q: numpy.ndarray, gains=None) -> numpy.ndarray:
-    ''' Predicted tip positions [sample][xyz] for motor angles q under the Poly
-        model with this full parameter vector (pccParams() gives PCC's own
-        prediction). gains = per-tendon cable-travel gains A..F (None = 1). '''
-    S = polyShape(params, q, gains)
-    A1, B1, A2, B2, s1p, s2p = S["A1"], S["B1"], S["A2"], S["B2"], S["s1"], S["s2"]
-    # kappa(sigma) = (A + (sigma - 1/2)*B)/s' = k0 + k1*sigma
-    p1, R1 = _sectionFK((A1 - B1/2)/s1p, B1/s1p, s1p)
-    p2, R2 = _sectionFK((A2 - B2/2)/s2p, B2/s2p, s2p)
-    tip = p1 + numpy.einsum("mij,mj->mi", R1, p2)
-    return tip + TOOL*(R1 @ R2)[:, :, 2]
 
 
 # ============================================================

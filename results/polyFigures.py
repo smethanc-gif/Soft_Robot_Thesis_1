@@ -56,7 +56,7 @@ def tendonGains():
     names = "ABCDEF"
     longT = [0, 2, 4]
     # direction each tendon pulls the tip (deg), from constantCurve.rotationalOffset + PCC_Control's offsets
-    pull = (90 - numpy.degrees(P._R.rotationalOffset) - numpy.array([0, 60, 120, 180, -120, -60])) % 360
+    pull = (90 - numpy.degrees(P.polyModel._R.rotationalOffset) - numpy.array([0, 60, 120, 180, -120, -60])) % 360
 
     fig = plt.figure(figsize=(10, 4.3))
     ax = fig.add_subplot(1, 2, 1)

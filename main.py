@@ -30,10 +30,11 @@ CURRENT_GLOB_FILE       = "CurrentTipPosition.txt"
 fileNumber = 55 # Filler so graphing doesn't fail
 
 ## CTRL PROPERTIES ##
-moveMode    = "PCC"                                     # "PCC", "Poly", "PD_test"  
+moveMode    = "PCC"                                     # "PCC", "PCC_Cable", "Poly", "PD_test"  
                                                         # DISCONNECT TENDONS FOR PD_test
 trajectory  = 5                                         # See MOVEMENT_FUNCTIONS()
-Robot     = ContinuumRobot(method=moveMode) if moveMode in ("PCC", "Poly") else None
+MODEL_MODES = ("PCC", "PCC_Cable", "Poly")              # modes that run a kinematic model (see PCC_control/CTRL.py)
+Robot     = ContinuumRobot(method=moveMode) if moveMode in MODEL_MODES else None
 PD_test_mode = "sine"           # ramp or sine
 
 ## MOVEMENT TIMINGS ##
@@ -241,7 +242,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
     
 
     
-    if mode in ("PCC", "Poly"):
+    if mode in MODEL_MODES:
 
         targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(0, _trajectory)
         Robot.setTarget(targGlobPos, targGlobVel)
@@ -282,7 +283,7 @@ def CTRL_INIT(mode, _trajectory: int, stm: STM32Comm, tracker: TipTracker):
             prevGlobPos = currGlobPos
         t_now = (t_init_start - t_glob) - 2
         W.writeAll(initEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now)
-        if mode == "PCC":
+        if mode in MODEL_MODES:
             W.writeCyl(Robot.targCylPos, t_now)
             W.writeLimits(Robot.limitFlags, t_now)
         stm.set_targets(initEgoPos, initEgoVel)
@@ -366,7 +367,7 @@ def main():
             ## CONTROL
             targGlobPos, targGlobVel = MOVEMENT_FUNCTIONS(t_now, trajectory)
             
-            if moveMode in ("PCC", "Poly"):
+            if moveMode in MODEL_MODES:
                 calcGlobPos = Robot.forwardKinematics()
                 targEgoPos, targEgoVel  = Robot.FullIK(targGlobPos, targGlobVel)
 
@@ -381,7 +382,7 @@ def main():
             
             ## DOCUMENT
             fileNumber = W.writeAll(targEgoPos, currEgoPos, targGlobPos,  calcGlobPos, currGlobPos, t_now +t_offset)
-            if moveMode == "PCC":
+            if moveMode in MODEL_MODES:
                 W.writeCyl(Robot.targCylPos, t_now +t_offset)
                 W.writeLimits(Robot.limitFlags, t_now +t_offset)
 

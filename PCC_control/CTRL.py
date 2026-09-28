@@ -1,30 +1,36 @@
 ## Goal - Control-method dispatcher: turns a target Cartesian pose into motor targets
 '''
-Owns which curvature model is active (e.g. "PCC" or, later, "Poly") and the
-generic control-loop bookkeeping (last commanded target, tool-offset removal).
-All curvature-specific math (FK, IK, cable-length conversion) is delegated to
-the active model - see constantCurve.py for the "PCC" model.
+Owns which control method is active and the generic control-loop bookkeeping
+(last commanded target, tool-offset removal). All model-specific math (FK,
+IK, cable-length conversion) is delegated to the active model:
+    "PCC"       - constantCurve.py: piecewise constant curvature
+    "PCC_Cable" - cableComp.py: PCC with each cable's travel corrected by its fitted gain
+    "Poly"      - poly.py: fitted polynomial-curvature model, built on PCC_Cable
+All three share PCC's target-shape solve (midpointCalc + PCC_Control).
 '''
 import numpy as np
 
 
 try:
     from . import constantCurve
+    from . import cableComp
     from . import poly
 except ImportError:
     import constantCurve
+    import cableComp
     import poly
+
+METHODS = {"PCC": constantCurve.ConstantCurvature,
+           "PCC_Cable": cableComp.CableCompensatedPCC,
+           "Poly": poly.PolynomialCurvature}
 
 
 class ContinuumRobot:
     def __init__(self, method: str = "PCC"):
         self.method = method
-        if method == "PCC":
-            self.model = constantCurve.ConstantCurvature()
-        elif method == "Poly":
-            self.model = poly.PolynomialCurvature()
-        else:
-            raise ValueError(f"Unknown control method: {method!r}")
+        if method not in METHODS:
+            raise ValueError(f"Unknown control method: {method!r} (choose from {list(METHODS)})")
+        self.model = METHODS[method]()
 
     def __getattr__(self, name):
         '''Fall through to the active model for anything not defined here
@@ -57,15 +63,9 @@ class ContinuumRobot:
             returns the motor positions necessary to get to the desired Cartesian Coordinates'''
         targBendPos = self.toolTransform(_targGlobPos)
         self.setTarget(targBendPos, _targGlobVel)
-        if self.method == "PCC":
-            self.model.midpointCalc(self.targGlobPos)
-            return self.model.PCC_Control(self.targGlobPos)
-        elif self.method == "Poly":
-            self.model.solveShape(self.targGlobPos)
-            return self.model.computeMotorTargets(self.targGlobPos)
+        self.model.midpointCalc(self.targGlobPos)
+        return self.model.PCC_Control(self.targGlobPos)
 
     def forwardKinematics(self) -> np.ndarray:
-        if self.method == "PCC":
-            return self.model.forwardKinematics()
-        elif self.method == "Poly":
-            return self.model.forwardKinematics()
+        ''' Tool pose the active model predicts for its last command. '''
+        return self.model.forwardKinematics()
