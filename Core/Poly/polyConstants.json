@@ -45,15 +45,15 @@
     ]
   },
   "tendon_gains_ABCDEF": [
-    0.8,
-    0.7,
+    0.75,
+    0.75,
     0.8,
     0.6,
     0.8,
     0.7
   ],
   "pcc_calibrated": {
-    "lam": 1.0482148650454748
+    "lam": 1.0
   },
   "poly": {
     "variant": "real+extra",
