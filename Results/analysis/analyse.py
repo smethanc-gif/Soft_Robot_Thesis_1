@@ -689,7 +689,7 @@ def main():
     #plotTracking3D(_test=228,_ctrl="PCC")
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
     #plotTracking3D(_test=8,_ctrl="Poly")
-    plotTracking3D(_test=32,_ctrl="PCC_Cable")
+    plotTracking3D(_test=40,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
     #printTrackingTable(tests)
     #plotSpeedStudy(tests)

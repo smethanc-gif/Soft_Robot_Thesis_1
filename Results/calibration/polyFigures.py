@@ -27,12 +27,12 @@ SCORES = SAVED["mean_tip_rmse_mm"]
 
 
 def plotModelComparison():
-    '''Bar chart of each model's tip prediction RMSE on both checks -> figures/poly_model_comparison.png.'''
-    models = [("PCC", GREY), ("PCC + tendon gains", BLUE),
-              ("Poly + gains, free shape", ORANGE), ("Poly + gains, shape held", AQUA)]
+    '''Bar chart of each model's mean tip prediction RMSE on each test group -> figures/poly_model_comparison.png.'''
+    models = [("PCC", GREY), ("PCC + cable compensation", BLUE),
+              ("Poly, free shape", ORANGE), ("Poly, shape held", AQUA)]
     checks = list(next(iter(SCORES.values())).keys())
-    labels = {"validation (mf 4)": "Validation runs\n(movementFreq 4)", "unseen figure 8s": "Figure 8s\n(never seen in training)"}
-    fig, ax = plt.subplots(figsize=(7.5, 4))
+    labels = {c: c.replace(" (", "\n(") for c in checks}
+    fig, ax = plt.subplots(figsize=(max(7.5, 1.9*len(checks)), 4))
     w = 0.19
     for i, (name, col) in enumerate(models):
         x = np.arange(len(checks)) + (i - 1.5)*(w + 0.01)
@@ -96,33 +96,31 @@ def plotTendonGains():
     plt.close(fig)
 
 
-def plotUnseenFigure8(_test=206):
-    '''Fits without any figure 8s, then predicts one - an honest unseen path -> figures/poly_unseen_figure8.png.'''
-    lag = SAVED["lag_samples"]
-    no8 = {k: v for k, v in P.TRAIN.items() if k != "figure 8"}
-    gains, _ = P.fitTendonGains(no8, lag, _verbose=False)
-    poly = P.fitPolyTerms(no8, lag, P.POLY_VARIANT, gains, P.SHAPE_WEIGHT, _verbose=False)
-    q, tip = P.loadFitData(_test, lag)
+def plotUnseenPath(_test: int = 235, _ctrl: str = "PCC"):
+    '''Predicts a test the fit never saw (default: a butterfly) from its motor angles with the saved
+        constants, against the camera -> figures/poly_unseen_path.png.'''
+    constants = P.polyModel.loadConstants()
+    q, tip = P.loadFitData(_test, constants["lag"], _ctrl)
     k = slice(0, len(q)//2)                           # first half of the run, for clarity
-    pcc, pol = P.calcPolyTip(P.getPCCParams(), q[k]), P.calcPolyTip(poly, q[k], gains)
-    fig, ax = plt.subplots(figsize=(7.5, 4.2))
+    pcc = P.calcPolyTip(P.getPCCParams(), q[k])
+    cable = P.calcPolyTip(constants["pcc"], q[k], constants["gains"])
+    pol = P.calcPolyTip(constants["poly"], q[k], constants["gains"])
+    fig, ax = plt.subplots(figsize=(7.5, 4.6))
     ax.plot(tip[k, 0], tip[k, 1], color=INK, linewidth=2, label="Measured (camera)")
-    ax.plot(pcc[:, 0], pcc[:, 1], color=GREY, linewidth=2, linestyle="--",
-            label=f"PCC prediction (RMSE {P.calcRmse(pcc, tip[k]):.1f} mm)")
-    ax.plot(pol[:, 0], pol[:, 1], color=AQUA, linewidth=2,
-            label=f"Poly prediction (RMSE {P.calcRmse(pol, tip[k]):.1f} mm)")
+    ax.plot(pcc[:, 0], pcc[:, 1], color=GREY, linewidth=2, linestyle="--", label=f"PCC (RMSE {P.calcRmse(pcc, tip[k]):.1f} mm)")
+    ax.plot(cable[:, 0], cable[:, 1], color=BLUE, linewidth=2, label=f"PCC + cable compensation (RMSE {P.calcRmse(cable, tip[k]):.1f} mm)")
+    ax.plot(pol[:, 0], pol[:, 1], color=AQUA, linewidth=2, label=f"Poly (RMSE {P.calcRmse(pol, tip[k]):.1f} mm)")
     ax.set_aspect("equal")
     ax.set_xlabel("X (mm)"); ax.set_ylabel("Y (mm)")
-    ax.set_title(f"Test {_test}, a figure 8 the model never saw: tip predicted from the motor angles",
-                 loc="left", fontsize=11)
-    ax.legend(frameon=False, fontsize=8.5, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=3)
+    ax.set_title(f"{_ctrl} Test {_test}, a path the fit never saw: tip predicted from the motor angles", loc="left", fontsize=11)
+    ax.legend(frameon=False, fontsize=8.5, loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2)
     fig.tight_layout()
-    fig.savefig(os.path.join(OUT, "poly_unseen_figure8.png"), dpi=150)
+    fig.savefig(os.path.join(OUT, "poly_unseen_path.png"), dpi=150)
     plt.close(fig)
 
 
 if __name__ == "__main__":
     plotModelComparison()
     plotTendonGains()
-    plotUnseenFigure8()
+    plotUnseenPath()
     print("saved to", OUT)

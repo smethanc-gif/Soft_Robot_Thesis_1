@@ -10,9 +10,9 @@
         "section1": [0, 60, 120, 180, -120, -60],
         "section2": [0, 120, -120]
     },
-    "sMinRatio": 0.8,
+    "sMinRatio": 0.5,
     "thetaMaxDeg": 90,
-    "motorLimit": 15.0,
+    "motorLimit": 20.0,
     "notes": {
         "sections": "number of bending sections",
         "nodes": "vertebrae per section, used for the cable-length chord correction in constantCurvature",

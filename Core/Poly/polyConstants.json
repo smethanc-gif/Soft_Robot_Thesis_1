@@ -3,45 +3,121 @@
   "lag_samples": 3,
   "n_sub": 8,
   "train_tests": {
-    "step-return": [
-      191,
-      203,
-      204
-    ],
-    "circle": [
-      192,
-      193,
-      195,
-      196,
-      197,
-      199
-    ],
-    "figure 8": [
-      201,
-      202,
-      205,
-      206,
-      209
-    ],
-    "helix": [
-      211,
-      212,
-      214,
-      215,
-      216
+    "circle z270": [
+      [
+        "PCC_Cable",
+        40
+      ]
     ]
   },
   "valid_tests": {
-    "circle": [
-      194,
-      198
+    "circle z270 repeats": [
+      [
+        "PCC_Cable",
+        34
+      ],
+      [
+        "PCC_Cable",
+        35
+      ],
+      [
+        "PCC_Cable",
+        36
+      ],
+      [
+        "PCC_Cable",
+        37
+      ],
+      [
+        "PCC_Cable",
+        38
+      ],
+      [
+        "PCC_Cable",
+        39
+      ]
     ],
-    "figure 8": [
-      208
+    "circle z280": [
+      [
+        "PCC_Cable",
+        21
+      ],
+      [
+        "PCC_Cable",
+        22
+      ],
+      [
+        "PCC_Cable",
+        23
+      ],
+      [
+        "PCC_Cable",
+        24
+      ],
+      [
+        "PCC_Cable",
+        25
+      ],
+      [
+        "PCC_Cable",
+        26
+      ],
+      [
+        "PCC_Cable",
+        27
+      ],
+      [
+        "PCC_Cable",
+        28
+      ],
+      [
+        "PCC_Cable",
+        29
+      ],
+      [
+        "PCC_Cable",
+        30
+      ],
+      [
+        "PCC_Cable",
+        31
+      ],
+      [
+        "PCC_Cable",
+        33
+      ]
     ],
-    "helix": [
-      213,
-      217
+    "butterfly (unseen path)": [
+      [
+        "PCC",
+        235
+      ],
+      [
+        "PCC_Cable",
+        41
+      ]
+    ],
+    "earlier PCC runs": [
+      [
+        "PCC",
+        194
+      ],
+      [
+        "PCC",
+        198
+      ],
+      [
+        "PCC",
+        208
+      ],
+      [
+        "PCC",
+        213
+      ],
+      [
+        "PCC",
+        217
+      ]
     ]
   },
   "tendon_gains_ABCDEF": [
@@ -58,75 +134,88 @@
   "poly": {
     "variant": "real+extra",
     "shape_weight_mm_per_deg": 1.0,
+    "sig_figs": 3,
     "constants": {
       "c0_1": [
-        1.0050016587033905,
+        1.52,
         0.0
       ],
       "h0_1": [
-        0.037893464263476326,
+        0.611,
         0.0
       ],
       "c1_1": [
-        -0.17732840359552,
+        169.0,
         0.0
       ],
       "h1_1": [
-        -0.4419868500501215,
+        176.0,
         0.0
       ],
       "c0_2": [
-        1.0039744710926102,
+        -0.198,
         0.0
       ],
       "h0_2": [
-        0.047852125526987185,
+        1.56,
         0.0
       ],
       "c1_2": [
-        0.48769052872103325,
+        -152.0,
         0.0
       ],
       "h1_2": [
-        0.3976190497089089,
+        -146.0,
         0.0
       ],
       "m_1": [
-        -0.31901971889012837,
+        -1.95,
         0.0
       ],
       "m_2": [
-        -0.07335124722762676,
+        -0.445,
         0.0
       ],
       "z_1": [
-        -1.3849713256501472,
+        -8.66,
         0.0
       ],
       "z_2": [
-        -0.6341574022884333,
+        -44.2,
         0.0
       ],
-      "lam_1": 1.047881352275398,
-      "lam_2": 1.047881352275398
+      "lam_1": 1.01,
+      "lam_2": 1.01
     }
   },
   "mean_tip_rmse_mm": {
     "PCC": {
-      "validation (mf 4)": 40.935165074489134,
-      "unseen figure 8s": 29.886927097587307
+      "training": 52.73455196708257,
+      "circle z270 repeats": 55.21437425899774,
+      "circle z280": 85.66225657932836,
+      "butterfly (unseen path)": 174.950329968972,
+      "earlier PCC runs": 40.935165074489134
     },
-    "PCC + tendon gains": {
-      "validation (mf 4)": 13.764125276207768,
-      "unseen figure 8s": 12.663867694424601
+    "PCC + cable compensation": {
+      "training": 14.622059944188114,
+      "circle z270 repeats": 15.955654552950664,
+      "circle z280": 49.04291986505851,
+      "butterfly (unseen path)": 181.92059938033717,
+      "earlier PCC runs": 15.380367031213368
     },
-    "Poly + gains, free shape": {
-      "validation (mf 4)": 12.622358883232105,
-      "unseen figure 8s": 8.460183191759308
+    "Poly, free shape": {
+      "training": 13.83025122262758,
+      "circle z270 repeats": 16.95530759197238,
+      "circle z280": 205.36922042710714,
+      "butterfly (unseen path)": 336.0697059746633,
+      "earlier PCC runs": 253.59751745006753
     },
-    "Poly + gains, shape held": {
-      "validation (mf 4)": 12.668788034448031,
-      "unseen figure 8s": 8.869418566165951
+    "Poly, shape held": {
+      "training": 12.400590331587065,
+      "circle z270 repeats": 14.464430383794358,
+      "circle z280": 168.78950251132713,
+      "butterfly (unseen path)": 290.36762352437734,
+      "earlier PCC runs": 235.31659157305074
     }
   }
 }

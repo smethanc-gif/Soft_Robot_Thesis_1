@@ -63,8 +63,9 @@ def calcTrainingRange():
     saved = json.load(open(polyModel.CONSTANTS_FILE))
     top = np.zeros(6)
     for tests in saved["train_tests"].values():
-        for t in tests:
-            tt, vals = parseLog(getLogPath(t, "PCC", "currentEgo"))
+        for test in tests:
+            ctrl, t = test if isinstance(test, list) else ("PCC", test)     # [moveMode, test], or a PCC test number in older files
+            tt, vals = parseLog(getLogPath(t, ctrl, "currentEgo"))
             q = np.array(vals).T[np.array(tt) >= 0]
             top = np.maximum(top, np.abs(q).max(axis=0))
     return top
