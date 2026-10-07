@@ -209,9 +209,10 @@ def main():
     '''Plots one example test.'''
     exampleTest = 182
     #printTimeStatistics([60, exampleTest])
-    plotEgoTracking(_test=exampleTest)
-    plotEgoTracking(_test=exampleTest, _vel=True)
-    plotGlobTracking3D(_test=exampleTest)
+    #plotEgoTracking(_test=exampleTest)
+    #plotEgoTracking(_test=exampleTest, _vel=True)
+    #plotGlobTracking3D(_test=exampleTest)
+    printTimeStatistics(_testRange = [43, 44], _ctrl = "PCC_Cable")
     #plotGlobError(_test=exampleTest)
 
 
