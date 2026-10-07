@@ -686,10 +686,10 @@ def main():
     #tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
     PCC_Cable_tests = [1,2,9,10,11,12,13,14,15,16,17,18,19,20]
     #plotStepReturn(exampleTest)
-    plotTracking3D(_test=272,_ctrl="PCC")
+    plotTracking3D(_test=273,_ctrl="PCC")
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
     #plotTracking3D(_test=8,_ctrl="Poly")
-    plotTracking3D(_test=41,_ctrl="PCC_Cable")
+    plotTracking3D(_test=65,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
     #printTrackingTable(tests)
     #plotSpeedStudy(tests)

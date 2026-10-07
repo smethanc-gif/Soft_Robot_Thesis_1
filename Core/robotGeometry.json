@@ -2,7 +2,7 @@
     "sections": 2,
     "nodes": 14,
     "robotRadius": 15.25,
-    "sectL": 148.5,
+    "sectL": 145,
     "spoolRadius": 5.0,
     "toolLength": 30.0,
     "rotationalOffset": 2.8623,
