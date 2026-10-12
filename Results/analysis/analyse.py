@@ -597,6 +597,64 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
     plt.show()
 
 
+def _plotPathsInPlane(_tests: list, _plane: str, _title: str, _ctrl: str, _showCalculated: bool, _homeRef: bool, _maxErrorMm: float, _timeRange: list[float]):
+    '''Desired, calculated (optional) and camera tip paths of several tests projected onto one plane
+        ("XY", "XZ" or "YZ"), with equal axes. The desired path is drawn once per distinct path (thick
+        grey); each test's camera path is solid and its calculated path dotted, in the test's own colour.
+        Same filtering as plotErrorOverlay: rejected camera samples and camera samples more than
+        _maxErrorMm from the desired tip are left out (gaps), and _timeRange picks the part of each run.'''
+    axisIdx = {"X": 0, "Y": 1, "Z": 2}
+    i, j = axisIdx[_plane[0]], axisIdx[_plane[1]]
+    tStart, tEnd = _timeRange
+    fig, ax = plt.subplots(figsize=(8, 8))
+    drawnDesired = []
+    for entry in _tests:
+        ctrl, test = entry if isinstance(entry, (tuple, list)) else (_ctrl, entry)
+        d, run, ok, dt, curh, _ = _prepareTest(test, ctrl)
+        meta = loadMeta(test, ctrl)
+        t = d["t"][run]
+        taskTime = meta.get("taskTime") if isinstance(meta.get("taskTime"), (int, float)) else t[-1]
+        window = (t/taskTime >= tStart) & (t/taskTime <= tEnd)
+        des, cal = d["des"][run, :3][window], d["cal"][run, :3][window]
+        cur = (curh if _homeRef else d["cur"][run, :3])[window]
+        keep = (ok & (np.linalg.norm(d["des"][run, :3] - (curh if _homeRef else d["cur"][run, :3]), axis=1) <= _maxErrorMm))[window]
+        cur = np.where(keep[:, None], cur, np.nan)
+        sample = des[::max(1, len(des)//200)]
+        if not any(np.max(np.min(np.linalg.norm(sample[:, None, :] - p[None, ::max(1, len(p)//400), :], axis=2), axis=1)) < 3.0 for p in drawnDesired):
+            ax.plot(des[:, i], des[:, j], color="gray", linewidth=4, alpha=0.35, solid_capstyle="round",
+                    label=f"Desired ({ctrl} {test})" if drawnDesired else "Desired")
+            drawnDesired.append(des)
+        line, = ax.plot(cur[:, i], cur[:, j], linewidth=1.3, label=f"{ctrl} {test} actual" + (" (home-referenced)" if _homeRef else ""))
+        if _showCalculated:
+            ax.plot(cal[:, i], cal[:, j], ":", color=line.get_color(), linewidth=1.3, alpha=0.8, label=f"{ctrl} {test} calculated")
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.set_title(_title)
+    ax.set_xlabel(f"{_plane[0]} (mm)")
+    ax.set_ylabel(f"{_plane[1]} (mm)")
+    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2, frameon=False)
+    ax.grid(True)
+    fig.tight_layout()
+    plt.show()
+
+
+def plotPathsXY(_tests: list, _title: str = "Tip paths, X-Y plane", _ctrl: str = "PCC", _showCalculated: bool = True, _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0)):
+    '''Desired vs calculated (toggle with _showCalculated) vs camera tip paths of several tests, viewed
+        from above (X-Y plane). _tests takes test numbers and/or (ctrl, test) pairs, as in plotErrorOverlay.'''
+    _plotPathsInPlane(_tests, "XY", _title, _ctrl, _showCalculated, _homeRef, _maxErrorMm, _timeRange)
+
+
+def plotPathsXZ(_tests: list, _title: str = "Tip paths, X-Z plane", _ctrl: str = "PCC", _showCalculated: bool = True, _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0)):
+    '''Desired vs calculated (toggle with _showCalculated) vs camera tip paths of several tests, viewed
+        from the side (X-Z plane). _tests takes test numbers and/or (ctrl, test) pairs, as in plotErrorOverlay.'''
+    _plotPathsInPlane(_tests, "XZ", _title, _ctrl, _showCalculated, _homeRef, _maxErrorMm, _timeRange)
+
+
+def plotPathsYZ(_tests: list, _title: str = "Tip paths, Y-Z plane", _ctrl: str = "PCC", _showCalculated: bool = True, _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0)):
+    '''Desired vs calculated (toggle with _showCalculated) vs camera tip paths of several tests, viewed
+        from the front (Y-Z plane). _tests takes test numbers and/or (ctrl, test) pairs, as in plotErrorOverlay.'''
+    _plotPathsInPlane(_tests, "YZ", _title, _ctrl, _showCalculated, _homeRef, _maxErrorMm, _timeRange)
+
+
 def plotSpeedStudy(_tests: list[int], _ctrl: str = "PCC", _labels: dict = None):
     '''Tracking vs mean tip speed, one colour per trajectory (from
         TestInfo.txt, or _labels {test: name} for older tests).
