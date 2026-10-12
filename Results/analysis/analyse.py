@@ -618,7 +618,7 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
     ax.set_xlim(xMin, xMax)
     ax.set_xlabel("Time within repetition (s)" if _splitRepetitions else "Task time (s)")
     ax.set_ylabel("Cartesian tracking error (mm)" + (", home-referenced" if _homeRef else ""))
-    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, frameon=False)
+    ax.legend(fontsize=10, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=4, frameon=False)
     ax.grid(True)
     fig.tight_layout()
     plt.show()
@@ -658,7 +658,7 @@ def _plotPathsInPlane(_tests: list, _plane: str, _title: str, _ctrl: str, _showC
     ax.set_title(_title)
     ax.set_xlabel(f"{_plane[0]} (mm)")
     ax.set_ylabel(f"{_plane[1]} (mm)")
-    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2, frameon=False)
+    ax.legend(fontsize=12, loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=2, frameon=False)
     ax.grid(True)
     fig.tight_layout()
     plt.show()
@@ -813,8 +813,18 @@ def main():
     PCC_Cable_tests = [1,2,9,10,11,12,13,14,15,16,17,18,19,20]
     PCC_300mmCircleTests = [248, 256, 274]
     PCCCable_300mmCircleTests = [("PCC_Cable", 44), ("PCC_Cable", 45), ("PCC_Cable", 46), ("PCC_Cable", 53)]
-    plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
-                     _timeRange=[0,0.25])
+
+    CircleCompare = [("PCC", 248), ("PCC_Cable", 66), ("Poly", 4)]
+    Fig8Compare = [("PCC", 278), ("PCC_Cable", 77), ("Poly", 4)]
+    HelixCompare = [("PCC", 214), ("PCC_Cable", 20), ("Poly", 4)]
+    #plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
+    #                 _splitRepetitions = True)
+    plotErrorOverlay(CircleCompare, "Full circle S-Shape, r100mm, z300mm: Compare Models",
+                         _timeRange=[0,0.25])
+    plotErrorOverlay(Fig8Compare, "Figure 8, a100mm, z270mm: Compare Models",
+                            _timeRange=[0,0.25])
+    plotErrorOverlay(HelixCompare, "Helix, r80mm, z300-260mm: Compare Models",
+                            _timeRange=[0,0.25])
     #plotStepReturn(exampleTest)
     #plotTracking3D(_test=273,_ctrl="PCC")
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
