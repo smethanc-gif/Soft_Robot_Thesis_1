@@ -682,15 +682,27 @@ def plotErrorBudget(_tests: list[int], _ctrl: str = "PCC"):
 
 def main():
     '''Tables / plots for the latest test day - uncomment what's needed.'''
-    exampleTest = 223
-    #tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
-    #plotStepReturn(exampleTest)
-    #plotTracking3D(_test=228,_ctrl="PCC")
+    exampleTestDay2 = [144, 147, 153, 157, 158, 167]
+    exampleTestDay3 = [192,196, 195, 199, 205, 202, 209, 211, 215, 214]
+    testsDay3 = [192,193,194,195,196,197,198,199,201,202,205,206,208,209,211,212,213,214,215,216,217] # From test day 3.1
+    PCC_Raw = [225,226,227,228,229,230,232]
+    PCC_Comp = [12,13,14,9,10,11,40]
+    #plotErrorBudget(exampleTestDay3)
+    #printTrackingTable(testsDay3)
+    #printTrackingTable(PCC_Comp, _ctrl="PCC_Cable")
+    # for i in range(len(PCC_Raw)):
+    #     plotTracking3D(_test=PCC_Raw[i])
+    #     plotTracking3D(_test=PCC_Comp[i],_ctrl="PCC_Cable")
+    for i in range(10):
+        plotTracking3D(_test = i+1, _ctrl="Poly")
+    # plotTracking3D(_test=232)
+    # plotTracking3D(_test=40,_ctrl="PCC_Cable")
+    
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
     #plotTracking3D(_test=8,_ctrl="Poly")
-    plotTracking3D(_test=32,_ctrl="PCC_Cable")
+    #plotTracking3D(_test=15,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
-    #printTrackingTable(tests)
+    
     #plotSpeedStudy(tests)
     #printTrackingTable(_ctrl="PCC_Cable", _tests=[1,2,3,5,6,8])
     # print("\n=== Error budget (RMSE mm after removing each cause) ===")
