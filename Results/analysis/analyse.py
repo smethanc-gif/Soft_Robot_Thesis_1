@@ -556,6 +556,47 @@ def plotTracking3D(_test: int, _ctrl: str = "PCC", _homeRef: bool = True):
     plt.show()
 
 
+def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0)):
+    '''Overlays the tip error norm (as in plotTracking3D's lower graph) of several runs of the same
+        trajectory against task time (s), each labelled with its RMSE. _tests holds test numbers from
+        the _ctrl folder and/or (ctrl, test) pairs to mix methods, e.g. [248, 256, ("PCC_Cable", 42)].
+        _timeRange picks the part of each run to graph as fractions of its task time, e.g. [0.4, 0.9]
+        is 12-27 s of a 30 s task; the RMSEs are over that part only. Samples with error over
+        _maxErrorMm are dropped (from the line and the RMSE), as are rejected camera samples - both
+        show as gaps. Warns if the runs aren't all the same trajectory.'''
+    tStart, tEnd = _timeRange
+    fig, ax = plt.subplots(figsize=(10, 5.5))
+    trajectories = set()
+    xMin, xMax = np.inf, -np.inf
+    for entry in _tests:
+        ctrl, test = entry if isinstance(entry, (tuple, list)) else (_ctrl, entry)
+        d, run, ok, dt, curh, _ = _prepareTest(test, ctrl)
+        meta = loadMeta(test, ctrl)
+        trajectories.add(meta.get("trajectory"))
+        t = d["t"][run]
+        taskTime = meta.get("taskTime") if isinstance(meta.get("taskTime"), (int, float)) else t[-1]
+        cur = curh if _homeRef else d["cur"][run, :3]
+        err = np.linalg.norm(d["des"][run, :3] - cur, axis=1)
+        frac = t/taskTime
+        window = (frac >= tStart) & (frac <= tEnd)
+        keep = ok & window & (err <= _maxErrorMm)
+        rmse = float(np.sqrt(np.mean(err[keep]**2))) if keep.any() else float("nan")
+        dropped = int(np.sum(ok & window & ~keep))
+        xMin, xMax = min(xMin, tStart*taskTime), max(xMax, tEnd*taskTime)
+        ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2,
+                label=f"{ctrl} {test} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
+    if len(trajectories) > 1:
+        print(f"Warning: these runs are from different trajectories {sorted(trajectories, key=str)}")
+    ax.set_title(_title)
+    ax.set_xlim(xMin, xMax)
+    ax.set_xlabel("Task time (s)")
+    ax.set_ylabel("Cartesian tracking error (mm)" + (", home-referenced" if _homeRef else ""))
+    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, frameon=False)
+    ax.grid(True)
+    fig.tight_layout()
+    plt.show()
+
+
 def plotSpeedStudy(_tests: list[int], _ctrl: str = "PCC", _labels: dict = None):
     '''Tracking vs mean tip speed, one colour per trajectory (from
         TestInfo.txt, or _labels {test: name} for older tests).
@@ -691,7 +732,8 @@ def main():
     #plotTracking3D(_test=8,_ctrl="Poly")
     plotTracking3D(_test=65,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
-    
+    #plotErrorOverlay([248, 256, 274, ("PCC_Cable", 42), ("PCC_Cable", 43)], "Full circle, r100 z300: PCC vs Cable")
+
     #plotSpeedStudy(tests)
     #plotErrorBudget(_ctrl="PCC_Cable", _tests=PCC_Cable_tests)
     # print("\n=== Error budget (RMSE mm after removing each cause) ===")
