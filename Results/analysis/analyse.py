@@ -556,7 +556,7 @@ def plotTracking3D(_test: int, _ctrl: str = "PCC", _homeRef: bool = True):
     plt.show()
 
 
-def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0), _splitRepetitions: bool = False):
+def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0), _splitRepetitions: bool = False, _removeLag: bool = False):
     '''Overlays the tip error norm (as in plotTracking3D's lower graph) of several runs of the same
         trajectory against task time (s), each labelled with its RMSE. _tests holds test numbers from
         the _ctrl folder and/or (ctrl, test) pairs to mix methods, e.g. [248, 256, ("PCC_Cable", 42)].
@@ -567,7 +567,10 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
         _splitRepetitions=True cuts each run into its movementFreq repetitions (period = taskTime /
         movementFreq, e.g. 7.5 s for 30 s at mf 4) and overlays them from 0 to one period, each with its
         own RMSE. With one test each repetition gets its own colour; with several, each test keeps one
-        colour and its repetitions get different line styles.'''
+        colour and its repetitions get different line styles.
+        _removeLag=True shifts each run's camera path back by the delay that best lines it up with the
+        desired path (up to 1 s, found over the whole run as in calcTrackingMetrics' rmse_lag_removed),
+        so the error shows path shape rather than lateness; the delay is given in the legend.'''
     tStart, tEnd = _timeRange
     fig, ax = plt.subplots(figsize=(10, 5.5))
     trajectories = set()
@@ -581,17 +584,32 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
         trajectories.add(meta.get("trajectory"))
         t = d["t"][run]
         taskTime = meta.get("taskTime") if isinstance(meta.get("taskTime"), (int, float)) else t[-1]
+        des = d["des"][run, :3]
         cur = curh if _homeRef else d["cur"][run, :3]
-        err = np.linalg.norm(d["des"][run, :3] - cur, axis=1)
+        lag = 0
+        if _removeLag:
+            lag, _ = _findBestLag(des, cur, ok, dt)
+            nKeep = len(t) - lag                                           # desired at t compared with actual at t + lag
+            t, des, cur, ok = t[:nKeep], des[:nKeep], cur[lag:], ok[lag:] & ok[:nKeep]
+        err = np.linalg.norm(des - cur, axis=1)
         frac = t/taskTime
         window = (frac >= tStart) & (frac <= tEnd)
         keep = ok & window & (err <= _maxErrorMm)
+
+        def makeLabel(_name, _rmse, _dropped):
+            '''Legend text: name, RMSE, and any lag removed / points dropped.'''
+            extras = [f"RMSE {_rmse:.1f} mm"]
+            if _removeLag:
+                extras.append(f"lag {lag*dt:.2f} s removed")
+            if _dropped:
+                extras.append(f"{_dropped} point{'s' if _dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped")
+            return f"{_name} ({', '.join(extras)})"
+
         if not _splitRepetitions:
             rmse = float(np.sqrt(np.mean(err[keep]**2))) if keep.any() else float("nan")
             dropped = int(np.sum(ok & window & ~keep))
             xMin, xMax = min(xMin, tStart*taskTime), max(xMax, tEnd*taskTime)
-            ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2,
-                    label=f"{ctrl} {test} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
+            ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2, label=makeLabel(f"{ctrl} {test}", rmse, dropped))
             continue
         mf = meta.get("movementFreq")
         if isinstance(mf, (int, float)) and mf > 0:
@@ -611,7 +629,7 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
             dropped = int(np.sum(ok & inRep & ~keepK))
             style = dict(color=colours[k % len(colours)]) if len(_tests) == 1 else dict(color=colours[n % len(colours)], linestyle=lineStyles[k % len(lineStyles)])
             ax.plot(t[inRep] - k*period, np.where(keepK, err, np.nan)[inRep], linewidth=1.2, **style,
-                    label=f"{ctrl} {test} rep {k + 1} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
+                    label=makeLabel(f"{ctrl} {test} rep {k + 1}", rmse, dropped))
     if len(trajectories) > 1:
         print(f"Warning: these runs are from different trajectories {sorted(trajectories, key=str)}")
     ax.set_title(_title)
