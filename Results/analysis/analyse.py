@@ -785,8 +785,8 @@ def main():
     #tests = [192,193,194,195,196,197,198,199,200,201,202,205,206,208,209,211,212,213,214,215,216,217,218] # From test day 3.1
     PCC_Cable_tests = [1,2,9,10,11,12,13,14,15,16,17,18,19,20]
     PCC_300mmCircleTests = [248, 256, 274]
-    PCCCable_300mmCircleTests = [("PCC_Cable", 42), ("PCC_Cable", 43), ("PCC_Cable", 66)]
-    plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z300mm: Test Run Consistency",
+    PCCCable_300mmCircleTests = [("PCC_Cable", 44), ("PCC_Cable", 45), ("PCC_Cable", 46), ("PCC_Cable", 53)]
+    plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
                      _timeRange=[0,0.25])
     #plotStepReturn(exampleTest)
     #plotTracking3D(_test=273,_ctrl="PCC")
