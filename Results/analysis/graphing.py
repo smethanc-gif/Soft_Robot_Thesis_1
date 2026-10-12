@@ -210,7 +210,7 @@ def main():
     PCCTests_Traj4 = [248, 256, 274, 249, 250, 251, 253, 267, 254, 255, 259, 260, 268]
     CableTests_Traj4 = [44, 43, 66, 44, 45, 46, 53, 47, 52, 68, 48, 51, 49, 50, 67, 59, 55, 57, 58]
     printTimeStatistics(PCCTests_Traj4)
-    printTimeStatistics(CableTests_Traj4)
+    printTimeStatistics(CableTests_Traj4, _ctrl = "PCC_Cable")
     #plotEgoTracking(_test=exampleTest)
     #plotEgoTracking(_test=exampleTest, _vel=True)
     #plotGlobTracking3D(_test=exampleTest, _ctrl = "PCC")
