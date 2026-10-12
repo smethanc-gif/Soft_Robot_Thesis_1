@@ -20,7 +20,7 @@ trajectory = CONTROL["trajectory"]
 # C-shape - both sections bend the same way (one arc, tool tilts with the bend)
 # S-shape - section 2 bends back by the same amount, tool stays vertical (as in traj 4, 7, 8)
 SR_DIRS     = [i*pi/4 for i in range(8)]                # bend directions (rad), same 8 as Tests 138-159
-SR_BENDS    = [pi/18, pi/6, pi/3, pi/2, 3*pi/4]         # total bend |theta1|+|theta2|: 10, 30, 60, 90, 135 deg
+SR_BENDS    = [pi/18, pi/6, pi/3, pi/2]         # total bend |theta1|+|theta2|: 10, 30, 60, 90, 135 deg
 SR_RAMP     = 2                                         # s, ramp out and ramp back each
 SR_HOLD     = 2                                         # s, hold bent
 SR_REST     = 3                                         # s, hold straight - residual measured here
@@ -61,7 +61,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
     10 - Step-return, S-shape'''
     match _trajectory:
         case 0:                                         ## Horizontal Circle
-            x   , y   , z   = 150, 30*sin(angularSpeed*_tNow), 220 + 30*cos(angularSpeed*_tNow)
+            x   , y   , z   = 150, 5*sin(angularSpeed*_tNow), 200 + 5*cos(angularSpeed*_tNow)
             Rx  , Ry  , Rz  = 0,  pi/2, 0
             dx  , dy  , dz  = 0, 0, 0
             dRx , dRy , dRz = 0, 0, 0
@@ -85,7 +85,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
 
         case 4: # Full Circle - centred, untilted; complements case 0's off-axis tilted loop
             x, y, z = 100*cos(angularSpeed*_tNow), 100*sin(angularSpeed*_tNow), 270
-            Rx, Ry, Rz = 0, 0, 0
+            Rx, Ry, Rz = (0)*sin(angularSpeed*_tNow) , (0)*cos(angularSpeed*_tNow), 0
             dx, dy, dz = 0, 0, 0
             dRx, dRy, dRz = 0, 0, 0
 
@@ -105,7 +105,7 @@ def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[floa
             a = 100
             x = a*cos(angularSpeed*_tNow)/(1+(sin(angularSpeed*_tNow))**2)
             y = a*sin(angularSpeed*_tNow)*cos(angularSpeed*_tNow)/(1+(sin(angularSpeed*_tNow)**2))
-            z = 280
+            z = 270
             Rx, Ry, Rz = [0]*3
             dx,dy,dz,dRx,dRy,dRz = [0]*6
 
