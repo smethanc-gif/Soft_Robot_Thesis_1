@@ -38,9 +38,7 @@ class CableCompensatedPCC(ConstantCurvature):
         v1 = k1*s1*np.exp(1j*r1)                      # bend of each section (rad, direction as a complex number)
         v2 = k2*s2*np.exp(1j*r2)
         # The model scales length changes by lengthGain, so ask for 1/lengthGain of PCC's
-        L = self.sectL
-        s1e, s2e = L + (s1 - L)/self.lengthGain, L + (s2 - L)/self.lengthGain
-        effective = polyModel.calcMotorsFromSections(s1e, v1, s2e, v2)[0]
+        effective = polyModel.calcMotorsFromSections(s1, v1, s2, v2)[0]
         return effective/self.tendonGains
 
     def _applyEgoCommand(self, _q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
