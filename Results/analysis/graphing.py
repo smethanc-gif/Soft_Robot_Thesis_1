@@ -105,7 +105,7 @@ def plotGlobTracking3D(_test: int, _ctrl: str = "PCC"):
     X, Y= np.meshgrid(x,y)
     Z = np.zeros_like(X+Y)
     axes.plot_surface(X,Y,Z,cmap="viridis", alpha=0.8)
-    axes.scatter(0, 0, 320, color="black", s=40, label="Starting Point")
+    axes.scatter(0, 0, 320, color="black", s=40, label="Starting i")
 
     axes.set_xlim(-200, 200)
     axes.set_ylim(-200, 200)
@@ -175,17 +175,17 @@ def printTimeStatistics(_testRange: list[int], _testPeriods=None, _ctrl: str = "
         print("Failure to provide testRange")
         return None
 
-    rangeDiff = _testRange[1] - _testRange[0]
+    rangeDiff = len(_testRange)
     timeStepN = np.zeros(rangeDiff)
     timeStepAvg = np.zeros(rangeDiff)
     timeStepMin = np.zeros(rangeDiff)
     timeStepMax = np.zeros(rangeDiff)
-    for i in range(_testRange[0], _testRange[1]):
-        point = i - _testRange[0]
-        times, _ = parseLog(getLogPath(i, _ctrl, "currentEgo"))
-        timeStepN[point], timeStepAvg[point], timeStepMin[point], timeStepMax[point] = calcTimeStatistics(times)
+    for i in range(rangeDiff):
+        
+        times, _ = parseLog(getLogPath(_testRange[i], _ctrl, "currentEgo"))
+        timeStepN[i], timeStepAvg[i], timeStepMin[i], timeStepMax[i] = calcTimeStatistics(times)
     print(f"\n------------------------------------------------------------------"+
-          f"\n TIME STATISTICS FOR {_ctrl} TESTS IN RANGE: [{_testRange[0]} : {_testRange[1]}]" +
+          f"\n TIME STATISTICS FOR {_ctrl} TESTS IN RANGE: [{_testRange[0]} : ]" +
           f"\n------------------------------------------------------------------\n")
 
     numNorm = stat.NormalDist.from_samples(timeStepN)
@@ -207,12 +207,13 @@ def printTimeStatistics(_testRange: list[int], _testPeriods=None, _ctrl: str = "
 
 def main():
     '''Plots one example test.'''
-    exampleTest = 182
-    #printTimeStatistics([60, exampleTest])
+    PCCTests_Traj4 = [248, 256, 274, 249, 250, 251, 253, 267, 254, 255, 259, 260, 268]
+    CableTests_Traj4 = [44, 43, 66, 44, 45, 46, 53, 47, 52, 68, 48, 51, 49, 50, 67, 59, 55, 57, 58]
+    printTimeStatistics(PCCTests_Traj4)
+    printTimeStatistics(CableTests_Traj4, _ctrl = "PCC_Cable")
     #plotEgoTracking(_test=exampleTest)
     #plotEgoTracking(_test=exampleTest, _vel=True)
-    #plotGlobTracking3D(_test=exampleTest)
-    printTimeStatistics(_testRange = [43, 44], _ctrl = "PCC_Cable")
+    #plotGlobTracking3D(_test=exampleTest, _ctrl = "PCC")
     #plotGlobError(_test=exampleTest)
 
 

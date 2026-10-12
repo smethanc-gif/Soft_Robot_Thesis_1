@@ -691,7 +691,7 @@ def main():
     #plotTracking3D(_test=8,_ctrl="Poly")
     plotTracking3D(_test=65,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
-    #printTrackingTable(tests)
+    
     #plotSpeedStudy(tests)
     #plotErrorBudget(_ctrl="PCC_Cable", _tests=PCC_Cable_tests)
     # print("\n=== Error budget (RMSE mm after removing each cause) ===")
