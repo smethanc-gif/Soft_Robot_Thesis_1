@@ -9,9 +9,9 @@ Motor angles -> tip pose, with the constants fitted in Results/calibration/polyF
   2. Cable lengths -> each section's PCC-equivalent arc length s and bend v
      (complex: direction + size), by inverting calcEgoTargets' cable equations.
   3. Poly curvature along each section, sigma in [0, 1]:
-         kappa_j(sigma) = [ A_j + (sigma - 1/2)*B_j ] / s_j'
+         kappa_j(sigma) = [ A_j + (sigma - 1/2)*B_j ] / s_j
      A_j (overall bend) and B_j (slope) are built from v_1, v_2 with the
-     fitted constants; s_j' = sectL + lam*(s_j - sectL).
+     fitted constants. The arc lengths s_j are used as PCC gives them.
   4. Section 1, then section 2, then the tool - composed as in
      ConstantCurvature.calcForwardKinematics.
 With the default constants (getPCCParams(), gains = 1) this is exactly PCC.
@@ -105,27 +105,23 @@ def _calcSectionFK(_k0: np.ndarray, _k1: np.ndarray, _s: np.ndarray):
     return p, R
 
 
-# Parameter layout: complex terms as (re, im) pairs, then the two length gains.
+# Parameter layout: complex terms as (re, im) pairs.
 TERMS = ["c0_1", "h0_1", "c1_1", "h1_1", "c0_2", "h0_2", "c1_2", "h1_2"]
 EXTRA_TERMS = ["m_1", "m_2", "z_1", "z_2"]        # bend-size (|v|^2) and compression (s - sectL) gain terms
 ALL_TERMS = TERMS + EXTRA_TERMS
-REAL_TERMS = ["lam_1", "lam_2"]
 
 
-def getPCCParams(_lam: float = 1.0) -> np.ndarray:
-    '''Full parameter vector that reproduces PCC (with length gain _lam).'''
-    p = np.zeros(2*len(ALL_TERMS) + len(REAL_TERMS))
+def getPCCParams() -> np.ndarray:
+    '''Full parameter vector that reproduces PCC.'''
+    p = np.zeros(2*len(ALL_TERMS))
     for name in ("c0_1", "c0_2"):
         p[2*ALL_TERMS.index(name)] = 1.0
-    p[-2:] = _lam
     return p
 
 
 def unpackParams(_params: np.ndarray) -> dict:
-    '''Full parameter vector -> {term name: value} (complex terms as complex numbers, length gains real).'''
-    out = {name: _params[2*i] + 1j*_params[2*i + 1] for i, name in enumerate(ALL_TERMS)}
-    out.update({name: _params[2*len(ALL_TERMS) + i] for i, name in enumerate(REAL_TERMS)})
-    return out
+    '''Full parameter vector -> {term name: value} (as complex numbers).'''
+    return {name: _params[2*i] + 1j*_params[2*i + 1] for i, name in enumerate(ALL_TERMS)}
 
 
 def packParams(_constants: dict) -> np.ndarray:
@@ -133,12 +129,11 @@ def packParams(_constants: dict) -> np.ndarray:
     p = getPCCParams()
     for i, name in enumerate(ALL_TERMS):
         p[2*i], p[2*i + 1] = _constants[name]
-    p[-2], p[-1] = _constants["lam_1"], _constants["lam_2"]
     return p
 
 
 def calcPolyShape(_params: np.ndarray, _q: np.ndarray, _gains=None) -> dict:
-    '''Both sections' Poly shape for motor angles _q: arc lengths s1', s2',
+    '''Both sections' Poly shape for motor angles _q: arc lengths s1, s2,
         overall bends A1, A2 (rad, complex = direction + size), curvature
         slopes B1, B2, and the calibrated-PCC bends v1, v2 they grew from.
         _gains = per-tendon cable-travel gains A..F (None = 1).'''
@@ -148,17 +143,16 @@ def calcPolyShape(_params: np.ndarray, _q: np.ndarray, _gains=None) -> dict:
     g2 = terms["c0_2"] + terms["m_2"]*abs(v2)**2 + terms["z_2"]*(s2 - SECT_L)/SECT_L
     return {"A1": g1*v1 + terms["h0_1"]*v2, "B1": terms["c1_1"]*v1 + terms["h1_1"]*v2,
             "A2": g2*v2 + terms["h0_2"]*v1, "B2": terms["c1_2"]*v2 + terms["h1_2"]*v1,
-            "s1": SECT_L + terms["lam_1"]*(s1 - SECT_L), "s2": SECT_L + terms["lam_2"]*(s2 - SECT_L),
-            "v1": v1, "v2": v2}
+            "s1": s1, "s2": s2, "v1": v1, "v2": v2}
 
 
 def calcPolyPose(_params: np.ndarray, _q: np.ndarray, _gains=None):
     '''Predicted tool tip [sample][xyz] and tool axis [sample][xyz].'''
     shape = calcPolyShape(_params, _q, _gains)
-    A1, B1, A2, B2, s1p, s2p = shape["A1"], shape["B1"], shape["A2"], shape["B2"], shape["s1"], shape["s2"]
-    # kappa(sigma) = (A + (sigma - 1/2)*B)/s' = k0 + k1*sigma
-    p1, R1 = _calcSectionFK((A1 - B1/2)/s1p, B1/s1p, s1p)
-    p2, R2 = _calcSectionFK((A2 - B2/2)/s2p, B2/s2p, s2p)
+    A1, B1, A2, B2, s1, s2 = shape["A1"], shape["B1"], shape["A2"], shape["B2"], shape["s1"], shape["s2"]
+    # kappa(sigma) = (A + (sigma - 1/2)*B)/s = k0 + k1*sigma
+    p1, R1 = _calcSectionFK((A1 - B1/2)/s1, B1/s1, s1)
+    p2, R2 = _calcSectionFK((A2 - B2/2)/s2, B2/s2, s2)
     axis = (R1 @ R2)[:, :, 2]
     return p1 + np.einsum("mij,mj->mi", R1, p2) + TOOL*axis, axis
 
@@ -174,12 +168,12 @@ def calcPolyTip(_params: np.ndarray, _q: np.ndarray, _gains=None) -> np.ndarray:
 def loadConstants(_path: str = CONSTANTS_FILE) -> dict:
     '''The constants saved by Results/calibration/polyFit.py:
           gains  - tendon gains A..F
-          pcc    - full parameter vector for cable-compensated PCC (length gain only)
+          pcc    - full parameter vector for cable-compensated PCC (plain PCC terms; the gains do the compensating)
           poly   - full parameter vector for the Poly model
           lag    - motor -> camera delay used in the fit (samples)'''
     with open(_path) as f:
         saved = json.load(f)
     return {"gains": np.array(saved["tendon_gains_ABCDEF"]),
-            "pcc": getPCCParams(saved["pcc_calibrated"]["lam"]),
+            "pcc": getPCCParams(),
             "poly": packParams(saved["poly"]["constants"]),
             "lag": saved["lag_samples"]}
