@@ -251,7 +251,7 @@ All three use the same PCC shape solve (`midpointCalc`, the s1/s2 coupling and t
 | Method (`moveMode`) | Where | Motor commands |
 |---|---|---|
 | `PCC` | `Core/PCC/constantCurvature.py` | PCC's cable geometry, unchanged |
-| `PCC_Cable` | `Core/PCC_Cable/cableCompensation.py` | PCC's target shape, with each motor angle divided by its cable gain (and the length gain applied), so the robot actually takes the shape PCC intends |
+| `PCC_Cable` | `Core/PCC_Cable/cableCompensation.py` | PCC's target shape, with each motor angle divided by its cable gain, so the robot actually takes the shape PCC intends |
 | `Poly` | `Core/Poly/polyCurvature.py` | starts from the `PCC_Cable` commands, then applies the smallest motor correction that puts the fitted Poly model's tip on the target |
 
 **How the Poly IK works, each 40 ms step:**

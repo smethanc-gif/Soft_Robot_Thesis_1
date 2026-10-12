@@ -1,9 +1,10 @@
 '''Fits the polynomial-curvature (Poly) model's constants to logged test data.
 
-The cable compensation - the tendon gains A..F ("tendon_gains_ABCDEF") and the
-length gain ("pcc_calibrated") in Core/Poly/polyConstants.json - is calibrated
-by hand on the robot and is never changed here: it is read from the file and
-held fixed, and only the Poly curvature terms are fitted on top of it.
+The cable compensation - the tendon gains A..F ("tendon_gains_ABCDEF") in
+Core/Poly/polyConstants.json - is calibrated by hand on the robot and is never
+changed here: it is read from the file and held fixed, and only the Poly
+curvature terms are fitted on top of it. There is no length gain: the section
+arc lengths are used as PCC gives them.
 
 Forward model, measured motor angles -> tip position:
   1. Cable lengths from the motor angles (same spool/offset constants as
@@ -12,15 +13,15 @@ Forward model, measured motor angles -> tip position:
      size) and arc length s_j, from inverting calcEgoTargets' cable equations:
      B, D, F only run through section 1; A, C, E run through both.
   3. Poly curvature along each section, sigma in [0, 1]:
-         kappa_j(sigma) = [ (c0_j*v_j + h0_j*v_k) + (sigma - 1/2)*(c1_j*v_j + h1_j*v_k) ] / s_j'
+         kappa_j(sigma) = [ (c0_j*v_j + h0_j*v_k) + (sigma - 1/2)*(c1_j*v_j + h1_j*v_k) ] / s_j
      (k = the other section) - the same linear kx/ky form as
-     Core/Poly/polyModel.py. s_j' = sectL + lam_j*(s_j - sectL).
+     Core/Poly/polyModel.py.
      Variants: gains real (scale only) or complex (scale + rotation of the
      bend vector); optional extra terms let the gain depend on bend size
      (|v|^2) and on compression (s_j - sectL).
   4. Tip = section 1 then section 2 then the tool, composed exactly as
      polyModel.calcPolyPose does (the model itself lives in Core/Poly/polyModel.py).
-PCC is the special case c0 = 1, everything else 0, lam = 1 - so the fitted
+PCC is the special case c0 = 1, everything else 0 - so the fitted
 constants show directly how the real robot differs from PCC.
 
 The fitted constants are rounded to SIG_FIGS significant figures before they
@@ -39,17 +40,22 @@ from Core.settings import loadControlSettings
 # The model itself (motors -> section shapes -> Poly tip) lives with the
 # controllers so the robot uses exactly what was fitted here.
 import Core.Poly.polyModel as polyModel
-from Core.Poly.polyModel import (SECT_L, N_SUB, ALL_TERMS, REAL_TERMS, TERMS, CONSTANTS_FILE,
+from Core.Poly.polyModel import (SECT_L, N_SUB, ALL_TERMS, TERMS, CONSTANTS_FILE,
                                    calcSectionsFromMotors, getPCCParams, unpackParams, calcPolyShape, calcPolyTip)
 
 TIME_STEP = loadControlSettings()["timeStep"]
 
 # ---- Data sets: {group: [(moveMode folder, test number), ...]} ----
-TRAIN = {"circle z270": [("PCC_Cable", 40)]}
-VALID = {"circle z270 repeats": [("PCC_Cable", t) for t in (34, 35, 36, 37, 38, 39)],
-         "circle z280": [("PCC_Cable", t) for t in (21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 33)],
-         "butterfly (unseen path)": [("PCC", 235), ("PCC_Cable", 41)],
-         "earlier PCC runs": [("PCC", t) for t in (194, 198, 208, 213, 217)]}
+# 7.10 session (Testing/Thesis Testing Results.xlsx, sheet 7.10): one run of each circle setting
+# trains, the repeats and the figure 8s validate.
+TRAIN = {"upright circles": [("PCC", t) for t in (248, 249, 250, 251, 254, 255)]
+                            + [("PCC_Cable", t) for t in (42, 44, 47, 48, 49)],
+         "tilted circles": [("PCC", t) for t in (259, 260, 261, 268)] + [("PCC_Cable", t) for t in (55, 57)]}
+VALID = {"upright circle repeats": [("PCC", t) for t in (253, 256, 267, 274)]
+                                   + [("PCC_Cable", t) for t in (43, 45, 46, 50, 51, 52, 53, 59, 66, 67, 68)],
+         "tilted circle repeat": [("PCC_Cable", 58)],
+         "figure 8 (unseen path)": [("PCC", 278), ("PCC_Cable", 70), ("PCC_Cable", 71), ("PCC_Cable", 77)],
+         "earlier session, z270": [("PCC_Cable", t) for t in (34, 35, 36, 37, 38, 39, 40)]}
 STEP_RETURN_STRIDE = 3                  # step-returns are ~7000 samples each - thin them so they don't swamp the rest
 POLY_VARIANT = "real+extra"             # Poly terms fitted (see VARIANTS)
 SHAPE_WEIGHT = 1.0                      # mm of tip error per deg of section bend moved away from calibrated PCC
@@ -57,24 +63,21 @@ SIG_FIGS = 3                            # significant figures the fitted constan
 
 # Every variant uses polyModel's full parameter vector; a variant just picks
 # which entries are fitted (the rest stay at their PCC values).
-VARIANTS = {                                       # (terms fitted, rotations allowed, one shared length gain)
-    "real":          (TERMS, False, True),
-    "real+extra":    (ALL_TERMS, False, True),
-    "complex":       (TERMS, True, False),
-    "complex+extra": (ALL_TERMS, True, False),
+VARIANTS = {                                       # (terms fitted, rotations allowed)
+    "real":          (TERMS, False),
+    "real+extra":    (ALL_TERMS, False),
+    "complex":       (TERMS, True),
+    "complex+extra": (ALL_TERMS, True),
 }
 
 
 def _getFreeIndex(_variant: str) -> np.ndarray:
     '''Indices of the full parameter vector that a variant fits (the rest stay at their PCC values).'''
-    terms, rotations, shared = VARIANTS[_variant]
+    terms, rotations = VARIANTS[_variant]
     idx = []
     for name in terms:
         i = 2*ALL_TERMS.index(name)
         idx += [i, i + 1] if rotations else [i]
-    idx.append(2*len(ALL_TERMS))                   # lam_1
-    if not shared:
-        idx.append(2*len(ALL_TERMS) + 1)           # lam_2
     return np.array(idx)
 
 
@@ -82,8 +85,6 @@ def expandParams(_x: np.ndarray, _variant: str) -> np.ndarray:
     '''Fitted values for a variant -> full parameter vector.'''
     full = getPCCParams()
     full[_getFreeIndex(_variant)] = _x
-    if VARIANTS[_variant][2]:
-        full[-1] = full[-2]                        # shared length gain
     return full
 
 
@@ -94,7 +95,7 @@ def roundSigFigs(_x: np.ndarray, _sigFigs: int = SIG_FIGS) -> np.ndarray:
 
 def loadCableCompensation() -> tuple[np.ndarray, np.ndarray]:
     '''The hand-calibrated cable compensation from polyConstants.json, held fixed during the fit:
-        (tendon gains A..F, PCC parameter vector with the calibrated length gain).'''
+        (tendon gains A..F, PCC parameter vector).'''
     constants = polyModel.loadConstants()
     return constants["gains"], constants["pcc"]
 
@@ -188,13 +189,10 @@ def evaluateModel(_params: np.ndarray, _tests: dict, _lag: int, _gains=None) -> 
 def printConstants(_params: np.ndarray):
     '''Prints a full parameter vector's constants (complex ones as size and angle).'''
     terms = unpackParams(_params)
-    print("Fitted constants (PCC: c0 = 1 at 0 deg, everything else 0, lam = 1):")
+    print("Fitted constants (PCC: c0 = 1 at 0 deg, everything else 0):")
     for name, v in terms.items():
-        if isinstance(v, complex):
-            if abs(v) > 0:
-                print(f"   {name:6s} = {abs(v):.{SIG_FIGS}g} at {np.degrees(np.angle(v)):+6.1f} deg")
-        else:
-            print(f"   {name:6s} = {v:.{SIG_FIGS}g}")
+        if abs(v) > 0:
+            print(f"   {name:6s} = {abs(v):.{SIG_FIGS}g} at {np.degrees(np.angle(v)):+6.1f} deg")
 
 
 def checkInversion(_test: int = 196):
@@ -210,18 +208,18 @@ def checkInversion(_test: int = 196):
 
 def saveConstants(_poly: np.ndarray, _lag: int, _summary: dict):
     '''Saves the Poly constants (and the data sets and scores that produced them) to polyConstants.json.
-        The hand-calibrated cable compensation ("tendon_gains_ABCDEF", "pcc_calibrated") is left exactly as it is.'''
+        The hand-calibrated cable compensation ("tendon_gains_ABCDEF") is left exactly as it is.'''
     with open(CONSTANTS_FILE) as f:
         saved = json.load(f)
-    cable = (saved["tendon_gains_ABCDEF"], saved["pcc_calibrated"])
+    cable = list(saved["tendon_gains_ABCDEF"])
     saved.update({"model": "fitted to measured motors -> camera tip (Results/calibration/polyFit.py)",
                   "lag_samples": _lag, "n_sub": N_SUB,
                   "train_tests": {g: [list(x) for x in tests] for g, tests in TRAIN.items()},
                   "valid_tests": {g: [list(x) for x in tests] for g, tests in VALID.items()},
                   "poly": {"variant": POLY_VARIANT, "shape_weight_mm_per_deg": SHAPE_WEIGHT, "sig_figs": SIG_FIGS,
-                           "constants": {k: ([v.real, v.imag] if isinstance(v, complex) else v) for k, v in unpackParams(_poly).items()}},
+                           "constants": {k: [v.real, v.imag] for k, v in unpackParams(_poly).items()}},
                   "mean_tip_rmse_mm": _summary})
-    assert (saved["tendon_gains_ABCDEF"], saved["pcc_calibrated"]) == cable
+    assert saved["tendon_gains_ABCDEF"] == cable
     with open(CONSTANTS_FILE, "w") as f:
         json.dump(saved, f, indent=2)
     print(f"\nSaved the Poly constants to {CONSTANTS_FILE} (cable compensation unchanged)")
@@ -233,8 +231,7 @@ def main():
     checkInversion()
 
     gains, pccCal = loadCableCompensation()
-    print("Cable compensation (held fixed): tendon gains A..F " + "  ".join(f"{m} {g:.3g}" for m, g in zip("ABCDEF", gains))
-          + f" | length gain {pccCal[2*len(ALL_TERMS)]:.3g}")
+    print("Cable compensation (held fixed): tendon gains A..F " + "  ".join(f"{m} {g:.3g}" for m, g in zip("ABCDEF", gains)))
 
     lag, scores = findBestLag(TRAIN, gains, pccCal)
     print(f"Motor -> camera delay: {lag} samples ({lag*TIME_STEP:.2f} s); cable-compensated RMSE by lag: "
@@ -246,7 +243,7 @@ def main():
               "Poly, free shape": (fitPolyTerms(TRAIN, lag, gains), gains),
               "Poly, shape held": (fitPolyTerms(TRAIN, lag, gains, _shapeWeight=SHAPE_WEIGHT), gains)}
 
-    groups = {"training": sum(TRAIN.values(), []), **VALID}
+    groups = {**{f"train: {g}": tests for g, tests in TRAIN.items()}, **VALID}
     perModel = {name: evaluateModel(p, groups, lag, g) for name, (p, g) in models.items()}
     names = list(models)
     print("\nTip prediction RMSE (mm):")
@@ -260,7 +257,7 @@ def main():
         print(f"   {name:24s} " + " | ".join(f"{g} {v:5.1f}" for g, v in s.items()))
 
     print("\nShape check - overall bend of each section (deg, + = along section 1's bend) for the same motor angles:")
-    for ctrl, t in [TRAIN[next(iter(TRAIN))][0], ("PCC", 235)]:
+    for ctrl, t in [tests[0] for tests in TRAIN.values()]:
         q, _ = loadFitData(t, lag, ctrl)
         q = q[len(q)//3:len(q)//3 + 1]
         u = calcSectionsFromMotors(q*gains)[1]
