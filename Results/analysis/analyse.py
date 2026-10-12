@@ -556,19 +556,25 @@ def plotTracking3D(_test: int, _ctrl: str = "PCC", _homeRef: bool = True):
     plt.show()
 
 
-def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0)):
+def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bool = True, _maxErrorMm: float = 100.0, _timeRange: list[float] = (0.0, 1.0), _splitRepetitions: bool = False):
     '''Overlays the tip error norm (as in plotTracking3D's lower graph) of several runs of the same
         trajectory against task time (s), each labelled with its RMSE. _tests holds test numbers from
         the _ctrl folder and/or (ctrl, test) pairs to mix methods, e.g. [248, 256, ("PCC_Cable", 42)].
         _timeRange picks the part of each run to graph as fractions of its task time, e.g. [0.4, 0.9]
         is 12-27 s of a 30 s task; the RMSEs are over that part only. Samples with error over
         _maxErrorMm are dropped (from the line and the RMSE), as are rejected camera samples - both
-        show as gaps. Warns if the runs aren't all the same trajectory.'''
+        show as gaps. Warns if the runs aren't all the same trajectory.
+        _splitRepetitions=True cuts each run into its movementFreq repetitions (period = taskTime /
+        movementFreq, e.g. 7.5 s for 30 s at mf 4) and overlays them from 0 to one period, each with its
+        own RMSE. With one test each repetition gets its own colour; with several, each test keeps one
+        colour and its repetitions get different line styles.'''
     tStart, tEnd = _timeRange
     fig, ax = plt.subplots(figsize=(10, 5.5))
     trajectories = set()
     xMin, xMax = np.inf, -np.inf
-    for entry in _tests:
+    lineStyles = ["-", "--", "-.", ":"]
+    colours = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    for n, entry in enumerate(_tests):
         ctrl, test = entry if isinstance(entry, (tuple, list)) else (_ctrl, entry)
         d, run, ok, dt, curh, _ = _prepareTest(test, ctrl)
         meta = loadMeta(test, ctrl)
@@ -580,16 +586,37 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
         frac = t/taskTime
         window = (frac >= tStart) & (frac <= tEnd)
         keep = ok & window & (err <= _maxErrorMm)
-        rmse = float(np.sqrt(np.mean(err[keep]**2))) if keep.any() else float("nan")
-        dropped = int(np.sum(ok & window & ~keep))
-        xMin, xMax = min(xMin, tStart*taskTime), max(xMax, tEnd*taskTime)
-        ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2,
-                label=f"{ctrl} {test} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
+        if not _splitRepetitions:
+            rmse = float(np.sqrt(np.mean(err[keep]**2))) if keep.any() else float("nan")
+            dropped = int(np.sum(ok & window & ~keep))
+            xMin, xMax = min(xMin, tStart*taskTime), max(xMax, tEnd*taskTime)
+            ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2,
+                    label=f"{ctrl} {test} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
+            continue
+        mf = meta.get("movementFreq")
+        if isinstance(mf, (int, float)) and mf > 0:
+            period = taskTime/mf
+        else:
+            period = _calcPeriod(d["des"][run, :3], dt, meta)
+            print(f"{ctrl} {test}: no movementFreq logged, using the path's own period ({period:.1f} s)")
+        nReps = max(1, int(round(taskTime/period)))
+        rep = np.minimum((t // period).astype(int), nReps - 1)            # the last sample or two past taskTime join the final repetition
+        xMin, xMax = 0.0, max(xMax if np.isfinite(xMax) else 0.0, period)
+        for k in range(nReps):
+            inRep = window & (rep == k)
+            if not inRep.any():
+                continue
+            keepK = keep & inRep
+            rmse = float(np.sqrt(np.mean(err[keepK]**2))) if keepK.any() else float("nan")
+            dropped = int(np.sum(ok & inRep & ~keepK))
+            style = dict(color=colours[k % len(colours)]) if len(_tests) == 1 else dict(color=colours[n % len(colours)], linestyle=lineStyles[k % len(lineStyles)])
+            ax.plot(t[inRep] - k*period, np.where(keepK, err, np.nan)[inRep], linewidth=1.2, **style,
+                    label=f"{ctrl} {test} rep {k + 1} (RMSE {rmse:.1f} mm" + (f", {dropped} point{'s' if dropped > 1 else ''} > {_maxErrorMm:.0f} mm dropped)" if dropped else ")"))
     if len(trajectories) > 1:
         print(f"Warning: these runs are from different trajectories {sorted(trajectories, key=str)}")
     ax.set_title(_title)
     ax.set_xlim(xMin, xMax)
-    ax.set_xlabel("Task time (s)")
+    ax.set_xlabel("Time within repetition (s)" if _splitRepetitions else "Task time (s)")
     ax.set_ylabel("Cartesian tracking error (mm)" + (", home-referenced" if _homeRef else ""))
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.13), ncol=2, frameon=False)
     ax.grid(True)
