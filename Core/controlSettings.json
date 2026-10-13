@@ -1,5 +1,5 @@
 {
-    "moveMode": "PCC_Cable",
+    "moveMode": "Poly",
     "trajectory": 7,
     "pdTestMode": "sine",
     "timeStep": 0.04,
