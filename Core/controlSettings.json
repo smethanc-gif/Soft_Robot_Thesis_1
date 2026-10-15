@@ -4,7 +4,7 @@
     "pdTestMode": "sine",
     "timeStep": 0.04,
     "taskTime": 30,
-    "movementFreq": 4,
+    "movementFreq": 3,
     "setupTime": 2,
     "setupHoldTime": 0.2,
     "packupTime": 2,

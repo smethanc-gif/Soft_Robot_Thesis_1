@@ -64,7 +64,7 @@ POSE_SAMPLES = 30
 # the marker towards the camera. Leave as zeros to use the marker centre itself.
 # e.g. if the workspace corner is 100mm to the right of the marker centre:
 # ORIGIN_OFFSET_MM = np.array([100.0, 0.0, 0.0])
-ORIGIN_OFFSET_MM = np.array([113.75, 95.25, 0.0])
+ORIGIN_OFFSET_MM = np.array([103.75, 95.25, 0.0])
 
 # --- Output smoothing ---
 # Exponential moving average: weight of the newest reading (1.0 = no smoothing,

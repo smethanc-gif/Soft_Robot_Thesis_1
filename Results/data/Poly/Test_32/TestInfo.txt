@@ -1,0 +1,11 @@
+moveMode = Poly
+trajectory = 10
+taskTime = 288
+movementFreq = n/a
+timeStep = 0.04
+smoothing = 1.0
+setupTime = 2
+setupHoldTime = 0.2
+packupTime = 2
+packupHoldTime = 2
+pdTestMode = sine
