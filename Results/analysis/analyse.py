@@ -833,11 +833,12 @@ def main():
     PCCCable_300mmCircleTests = [("PCC_Cable", 44), ("PCC_Cable", 45), ("PCC_Cable", 46), ("PCC_Cable", 53)]
 
     CircleCompare = [("PCC", 248), ("PCC_Cable", 66), ("Poly", 4)]
+    CirclePCC = [("PCC", 248), ("PCC", 256), ("PCC", 274)]
     Fig8Compare = [("PCC", 278), ("PCC_Cable", 77), ("Poly", 4)]
     HelixCompare = [("PCC", 214), ("PCC_Cable", 20), ("Poly", 4)]
     #plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
     #                 _splitRepetitions = True)
-    plotErrorOverlay(CircleCompare, "Full circle S-Shape, r100mm, z300mm: Compare Models",
+    plotErrorOverlay(CirclePCC, "Full circle S-Shape, r100mm, z300mm: PCC Standard",
                           _timeRange=[0,0.25])
     # plotErrorOverlay(Fig8Compare, "Figure 8, a100mm, z270mm: Compare Models",
     #                         _timeRange=[0,0.25])
