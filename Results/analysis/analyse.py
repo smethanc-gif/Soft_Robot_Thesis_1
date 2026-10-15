@@ -837,8 +837,9 @@ def main():
     HelixCompare = [("PCC", 214), ("PCC_Cable", 20), ("Poly", 4)]
     #plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
     #                 _splitRepetitions = True)
-    plotErrorOverlay(CircleCompare, "Full circle S-Shape, r100mm, z300mm: Compare Models",
-                          _timeRange=[0,0.25])
+    #plotErrorOverlay(CircleCompare, "Full circle S-Shape, r100mm, z300mm: Compare Models",
+    #                      _timeRange=[0,0.25])
+
     # plotErrorOverlay(Fig8Compare, "Figure 8, a100mm, z270mm: Compare Models",
     #                         _timeRange=[0,0.25])
     # plotErrorOverlay(HelixCompare, "Helix, r80mm, z300-260mm: Compare Models",
@@ -848,7 +849,7 @@ def main():
     #plotStepReturn(exampleTest)
     #plotTracking3D(_test=273,_ctrl="PCC")
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
-    #plotTracking3D(_test=8,_ctrl="Poly")
+    plotTracking3D(_test=28,_ctrl="Poly")
     #plotTracking3D(_test=65,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
     #plotErrorOverlay([248, 256, 274, ("PCC_Cable", 42), ("PCC_Cable", 43)], "Full circle, r100 z300: PCC vs Cable")
