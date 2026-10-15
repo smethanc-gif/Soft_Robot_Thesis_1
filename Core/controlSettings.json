@@ -1,6 +1,6 @@
 {
-    "moveMode": "Poly",
-    "trajectory": 4,
+    "moveMode": "PCC",
+    "trajectory": 7,
     "pdTestMode": "sine",
     "timeStep": 0.04,
     "taskTime": 30,
