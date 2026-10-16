@@ -215,7 +215,7 @@ def main():
     #plotEgoTracking(_test=exampleTest, _vel=True)
     #plotGlobTracking3D(_test=exampleTest, _ctrl = "PCC")
     #plotGlobError(_test=exampleTest)
-    plotEgoTracking(41,_ctrl = "Poly",_vel=True)
+    plotEgoTracking(45,_ctrl = "Poly",_vel=False)
 
 if __name__ == "__main__":
     main()
