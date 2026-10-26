@@ -10,6 +10,7 @@ Use from the repo root, e.g.
 import sys, pathlib; sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))  # repo root, so this file can be run directly
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 from scipy.signal import correlate, correlation_lags
 from Results.logReader import parseLog, getLogPath, loadTest, loadMeta
 from Results.analysis.graphing import calcGlobErrorMetrics
@@ -568,6 +569,9 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
         movementFreq, e.g. 7.5 s for 30 s at mf 4) and overlays them from 0 to one period, each with its
         own RMSE. With one test each repetition gets its own colour; with several, each test keeps one
         colour and its repetitions get different line styles.
+        When _tests mixes control types, each type gets one colour: its runs get different line
+        styles (or, with _splitRepetitions, lighter shades of that colour, the line style marking the
+        repetition).
         _removeLag=True shifts each run's camera path back by the delay that best lines it up with the
         desired path (up to 1 s, found over the whole run as in calcTrackingMetrics' rmse_lag_removed),
         so the error shows path shape rather than lateness; the delay is given in the legend.'''
@@ -575,10 +579,14 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
     fig, ax = plt.subplots(figsize=(10, 5.5))
     trajectories = set()
     xMin, xMax = np.inf, -np.inf
-    lineStyles = ["-", "--", "-.", ":"]
+    lineStyles = ["-", "--", "-.", ":", (0, (5, 1, 1, 1, 1, 1)), (0, (1, 3))]
     colours = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    for n, entry in enumerate(_tests):
-        ctrl, test = entry if isinstance(entry, (tuple, list)) else (_ctrl, entry)
+    entries = [entry if isinstance(entry, (tuple, list)) else (_ctrl, entry) for entry in _tests]
+    ctrls = list(dict.fromkeys(ctrl for ctrl, _ in entries))         # control types in order of first appearance
+    byCtrl = len(ctrls) > 1
+    for n, (ctrl, test) in enumerate(entries):
+        ctrlColour = colours[ctrls.index(ctrl) % len(colours)]
+        j = sum(1 for c, _ in entries[:n] if c == ctrl)                # this run's index among its control type's runs
         d, run, ok, dt, curh, _ = _prepareTest(test, ctrl)
         meta = loadMeta(test, ctrl)
         trajectories.add(meta.get("trajectory"))
@@ -609,7 +617,8 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
             rmse = float(np.sqrt(np.mean(err[keep]**2))) if keep.any() else float("nan")
             dropped = int(np.sum(ok & window & ~keep))
             xMin, xMax = min(xMin, tStart*taskTime), max(xMax, tEnd*taskTime)
-            ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2, label=makeLabel(f"{ctrl} {test}", rmse, dropped))
+            style = dict(color=ctrlColour, linestyle=lineStyles[j % len(lineStyles)]) if byCtrl else {}
+            ax.plot(t[window], np.where(keep, err, np.nan)[window], linewidth=1.2, **style, label=makeLabel(f"{ctrl} {test}", rmse, dropped))
             continue
         mf = meta.get("movementFreq")
         if isinstance(mf, (int, float)) and mf > 0:
@@ -627,7 +636,14 @@ def plotErrorOverlay(_tests: list, _title: str, _ctrl: str = "PCC", _homeRef: bo
             keepK = keep & inRep
             rmse = float(np.sqrt(np.mean(err[keepK]**2))) if keepK.any() else float("nan")
             dropped = int(np.sum(ok & inRep & ~keepK))
-            style = dict(color=colours[k % len(colours)]) if len(_tests) == 1 else dict(color=colours[n % len(colours)], linestyle=lineStyles[k % len(lineStyles)])
+            if byCtrl:
+                shade = mcolors.to_rgb(ctrlColour)
+                shade = tuple(c + (1 - c)*min(0.6, 0.3*j) for c in shade)  # later runs of the same type are lighter
+                style = dict(color=shade, linestyle=lineStyles[k % len(lineStyles)])
+            elif len(_tests) == 1:
+                style = dict(color=colours[k % len(colours)])
+            else:
+                style = dict(color=colours[n % len(colours)], linestyle=lineStyles[k % len(lineStyles)])
             ax.plot(t[inRep] - k*period, np.where(keepK, err, np.nan)[inRep], linewidth=1.2, **style,
                     label=makeLabel(f"{ctrl} {test} rep {k + 1}", rmse, dropped))
     if len(trajectories) > 1:
@@ -670,8 +686,8 @@ def _plotPathsInPlane(_tests: list, _plane: str, _title: str, _ctrl: str, _showC
                     label=f"Desired ({ctrl} {test})" if drawnDesired else "Desired")
             drawnDesired.append(des)
         line, = ax.plot(cur[:, i], cur[:, j], linewidth=1.3, label=f"{ctrl} {test} actual" + (" (home-referenced)" if _homeRef else ""))
-        if _showCalculated:
-            ax.plot(cal[:, i], cal[:, j], ":", color=line.get_color(), linewidth=1.3, alpha=0.8, label=f"{ctrl} {test} calculated")
+        # if _showCalculated:
+            # ax.plot(cal[:, i], cal[:, j], ":", color=line.get_color(), linewidth=1.3, alpha=0.8, label=f"{ctrl} {test} calculated")
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_title(_title)
     ax.set_xlabel(f"{_plane[0]} (mm)")
@@ -832,25 +848,32 @@ def main():
     PCC_300mmCircleTests = [248, 256, 274]
     PCCCable_300mmCircleTests = [("PCC_Cable", 44), ("PCC_Cable", 45), ("PCC_Cable", 46), ("PCC_Cable", 53)]
 
-    CircleCompare = [("PCC", 248), ("PCC_Cable", 66), ("Poly", 4)]
-    CirclePCC = [("PCC", 248), ("PCC", 256), ("PCC", 274)]
-    Fig8Compare = [("PCC", 278), ("PCC_Cable", 77), ("Poly", 4)]
-    HelixCompare = [("PCC", 214), ("PCC_Cable", 20), ("Poly", 4)]
+    SCircleCompare = [("PCC", 253), ("PCC_Cable", 50), ("Poly", 23)]
+    CCircleCompare = [("PCC", 259), ("PCC_Cable", 55), ("Poly", 25),("Poly", 24)]
+    CCircleCompare2 = [("PCC", 260), ("PCC_Cable", 57),("PCC_Cable", 58), ("Poly", 34)]
+    #CirclePCC = [("PCC", 248), ("PCC", 256), ("PCC", 274)]
+    Fig8Compare = [("PCC", 299), ("PCC_Cable", 91), ("Poly", 42)]
+    HelixCompare = [("PCC", 291), ("PCC_Cable", 84), ("Poly", 36),
+                    ("PCC", 293), ("PCC_Cable", 85), ("Poly", 37),
+                    ("PCC", 294), ("PCC_Cable", 86), ("Poly", 38)]
     #plotErrorOverlay(PCCCable_300mmCircleTests, "Full circle, r100mm, z280mm: Test Run Consistency",
     #                 _splitRepetitions = True)
-    #plotErrorOverlay(CircleCompare, "Full circle S-Shape, r100mm, z300mm: Compare Models",
-    #                      _timeRange=[0,0.25])
-
-    # plotErrorOverlay(Fig8Compare, "Figure 8, a100mm, z270mm: Compare Models",
-    #                         _timeRange=[0,0.25])
-    # plotErrorOverlay(HelixCompare, "Helix, r80mm, z300-260mm: Compare Models",
-    #                         _timeRange=[0,0.25])
+    plotPathsXY(SCircleCompare,"Full circle S-Shape, r100mm, z250mm: Compare Models")
+    plotErrorOverlay(SCircleCompare, "Full circle S-Shape, r100mm, z250mm: Compare Models ",
+                        _splitRepetitions=True)
+    plotErrorOverlay(CCircleCompare, "Full circle C-Shape, r150mm, z250mm: Compare Models "
+                             )
+    plotErrorOverlay(CCircleCompare2, "Full circle C-Shape, r140mm, z220mm: Compare Models "
+                                 )
+    plotErrorOverlay(Fig8Compare, "Figure 8, a100mm, z270mm: Compare Models ")
+    plotErrorOverlay(HelixCompare, "Helix, r90mm, z300-250mm: Compare Models ",
+                            _timeRange=[0,1])
     #plotErrorOverlay([248,256,274,283], "Full circle, r100mm, z300mm", _splitRepetitions = True)
     #plotTracking3D(_test=248,_ctrl="PCC")
     #plotStepReturn(exampleTest)
-    #plotTracking3D(_test=273,_ctrl="PCC")
+    plotTracking3D(_test=273,_ctrl="PCC")
     #plotTracking3D(_test=10,_ctrl="PCC_Cable")
-    plotTracking3D(_test=28,_ctrl="Poly")
+    #plotTracking3D(_test=28,_ctrl="Poly")
     #plotTracking3D(_test=65,_ctrl="PCC_Cable")
     #plotTracking3D(_test=10,_ctrl="Poly")
     #plotErrorOverlay([248, 256, 274, ("PCC_Cable", 42), ("PCC_Cable", 43)], "Full circle, r100 z300: PCC vs Cable")

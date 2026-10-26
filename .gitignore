@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Large generated animations (too big for GitHub)
+*.gif
