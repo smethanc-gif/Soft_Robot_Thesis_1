@@ -7,7 +7,7 @@
     "movementFreq": 1,
     "setupTime": 2,
     "setupHoldTime": 0.2,
-    "packupTime": 2,
+    "packupTime": 1,
     "packupHoldTime": 2,
     "notes": {
         "moveMode": "control method: PCC, PCC_Cable, Poly, or PD_test (DISCONNECT TENDONS FOR PD_test)",
