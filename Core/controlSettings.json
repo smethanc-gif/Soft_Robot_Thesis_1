@@ -9,6 +9,8 @@
     "setupHoldTime": 0.2,
     "packupTime": 1,
     "packupHoldTime": 2,
+    "cycleTrajectories": [4, 7, 8],
+    "cycleRestTime": 3,
     "notes": {
         "moveMode": "control method: PCC, PCC_Cable, Poly, or PD_test (DISCONNECT TENDONS FOR PD_test)",
         "trajectory": "tip path, see Core/trajectories.py calcTargGlob: 0 horizontal circle, 1 vertical spiral, 2 vertical rotate, 3 controller input, 4 full circle, 5 butterfly, 7 figure 8, 8 3D helix, 9 step-return C-shape, 10 step-return S-shape",
@@ -19,6 +21,8 @@
         "setupTime": "s, moving into the t = 0 position before the task (logged, t = -2 -> 0)",
         "setupHoldTime": "s, held at the start of setupTime (motors at zero) and at its end (at the t = 0 motor positions)",
         "packupTime": "s, ramp back to zero after the task",
-        "packupHoldTime": "s, held at zero after the pack-up ramp, before disabling"
+        "packupHoldTime": "s, held at zero after the pack-up ramp, before disabling",
+        "cycleTrajectories": "implementation.py only: trajectories run in order, returning to zero between each, looping until Ctrl+C. taskTime and movementFreq apply to each one. Not 3 (controller input). [] runs \"trajectory\" once instead",
+        "cycleRestTime": "s, implementation.py only: rest at zero between cycled trajectories"
     }
 }

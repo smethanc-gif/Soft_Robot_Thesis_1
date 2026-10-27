@@ -29,22 +29,32 @@ SR_BEND_L   = 2*GEOMETRY["sectL"]                       # mm, both sections as o
 SR_TOOL_L   = GEOMETRY["toolLength"]                    # mm
 
 # ---- Task timing for the chosen trajectory ----
-movementFreq = "n/a"                                    # only used by the periodic trajectories
 if trajectory == 3:
     from controller.ctrlInput import Controller        # pygame - only needed for controller input
     gamepad = Controller()
-    taskTime = 1000
-elif trajectory == 5:
-    taskTime = 100
-elif trajectory in (9, 10):
-    taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
-else:
-    taskTime = CONTROL["taskTime"]
-    movementFreq = CONTROL["movementFreq"]              # repetitions of the movement in taskTime
-    angularSpeed = pi*2*movementFreq/taskTime
 
-if trajectory == 1:
-    angularSpeed *= 2
+
+def setTrajectoryTiming(_trajectory: int):
+    '''Sets taskTime, movementFreq and angularSpeed for a trajectory. Called once below for the
+       settings trajectory, and again by implementation.py whenever it switches trajectory.'''
+    global taskTime, movementFreq, angularSpeed
+    movementFreq = "n/a"                                # only used by the periodic trajectories
+    if _trajectory == 3:
+        taskTime = 1000
+    elif _trajectory == 5:
+        taskTime = 100
+    elif _trajectory in (9, 10):
+        taskTime = SR_CYCLE*len(SR_DIRS)*len(SR_BENDS)
+    else:
+        taskTime = CONTROL["taskTime"]
+        movementFreq = CONTROL["movementFreq"]          # repetitions of the movement in taskTime
+        angularSpeed = pi*2*movementFreq/taskTime
+
+    if _trajectory == 1:
+        angularSpeed *= 2
+
+
+setTrajectoryTiming(trajectory)
 
 
 def calcTargGlob(_tNow: float, _trajectory: int) -> tuple[list[float], list[float]]:
