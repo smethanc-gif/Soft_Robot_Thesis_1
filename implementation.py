@@ -107,7 +107,7 @@ def runControlLoop(_stm: STM32Comm, _state: dict) -> bool:
             return False
 
         waitForStepEnd(tStepStart)
-    return True
+    return False
 
 
 def returnToZero(_stm: STM32Comm, _state: dict):
@@ -141,7 +141,7 @@ def main():
                 print("Something is wrong!\n")
                 break
             keepGoing = runControlLoop(stm, state)
-            returnToZero(stm, state)
+            #returnToZero(stm, state)
             if not keepGoing:
                 break
             time.sleep(restTime)
